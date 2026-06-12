@@ -1,10 +1,11 @@
 import { useLang } from '../i18n/LangContext';
-import { LayoutDashboard, Users, FileText, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Receipt, Settings } from 'lucide-react';
 
 const tabs = [
   { key: 'dashboard', icon: LayoutDashboard },
   { key: 'clients', icon: Users },
   { key: 'quotes', icon: FileText },
+  { key: 'invoices', icon: Receipt },
   { key: 'settings', icon: Settings },
 ];
 
@@ -15,6 +16,7 @@ export default function BottomNav({ current, navigate }) {
     dashboard: t.nav.dashboard,
     clients: t.nav.clients,
     quotes: t.nav.quotes,
+    invoices: t.nav.invoices,
     settings: t.common.settings,
   };
 

@@ -1,5 +1,5 @@
 import { useLang } from '../i18n/LangContext';
-import { statusColor } from '../utils/format';
+import { statusColor, invoiceStatusColor } from '../utils/format';
 
 export function Button({ children, onClick, variant = 'primary', size = 'md', disabled, className = '', type = 'button' }) {
   const base = 'inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed';
@@ -82,6 +82,20 @@ export function StatusBadge({ status }) {
   const { t } = useLang();
   const colors = statusColor(status);
   const label = t.quote.statuses[status] || status;
+  return (
+    <span
+      className="text-xs font-semibold px-2.5 py-1 rounded-full"
+      style={{ background: colors.bg, color: colors.text, border: `1px solid ${colors.border}` }}
+    >
+      {label}
+    </span>
+  );
+}
+
+export function InvoiceStatusBadge({ status }) {
+  const { t } = useLang();
+  const colors = invoiceStatusColor(status);
+  const label = t.invoice.statuses[status] || status;
   return (
     <span
       className="text-xs font-semibold px-2.5 py-1 rounded-full"
