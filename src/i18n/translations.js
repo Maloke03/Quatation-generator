@@ -3,7 +3,6 @@ export const translations = {
     appName: "QuotePro",
     appTagline: "Win more jobs. Quote in minutes.",
 
-    // Nav
     nav: {
       dashboard: "Dashboard",
       clients: "Clients",
@@ -12,7 +11,6 @@ export const translations = {
       newQuote: "New Quote",
     },
 
-    // Dashboard
     dashboard: {
       title: "Dashboard",
       totalQuotes: "Total Quotes",
@@ -25,7 +23,6 @@ export const translations = {
       outstanding: "Outstanding Balance",
     },
 
-    // Clients
     clients: {
       title: "Clients",
       addClient: "Add Client",
@@ -43,7 +40,6 @@ export const translations = {
       confirmDelete: "Delete this client? Their quotations will remain.",
     },
 
-    // Quote Builder
     quote: {
       title: "Quotations",
       newQuote: "New Quotation",
@@ -90,7 +86,6 @@ export const translations = {
       companyDetails: "Your Company Details",
     },
 
-    // Company setup
     company: {
       title: "Company Details",
       name: "Company Name",
@@ -105,7 +100,6 @@ export const translations = {
       setup: "Set Up Company",
     },
 
-    // Print / PDF
     print: {
       quotation: "QUOTATION",
       preparedFor: "Prepared For",
@@ -121,7 +115,6 @@ export const translations = {
       thankYou: "Thank you for your business.",
     },
 
-    // Invoice
     invoice: {
       title: "Invoices",
       invoice: "INVOICE",
@@ -162,7 +155,6 @@ export const translations = {
       delete: "Delete",
     },
 
-    // Common
     common: {
       save: "Save",
       cancel: "Cancel",
@@ -170,7 +162,7 @@ export const translations = {
       edit: "Edit",
       back: "Back",
       loading: "Loading...",
-      currency: "M", // Lesotho Loti symbol
+      currency: "M",
       search: "Search...",
       required: "This field is required",
       noResults: "No results found",
@@ -188,11 +180,7 @@ export const translations = {
 
     nav: {
       dashboard: "Lapeng",
-<<<<<<< HEAD
       clients: "Bareki",
-=======
-      clients: "Barekisi",
->>>>>>> df70914 (feat: V2 invoice system with payment tracking)
       quotes: "Direkoto",
       invoices: "Diinvoice",
       newQuote: "Rekoto Entsha",
@@ -201,11 +189,7 @@ export const translations = {
     dashboard: {
       title: "Lapeng",
       totalQuotes: "Direkoto Tsohle",
-<<<<<<< HEAD
       totalClients: "Bareki",
-=======
-      totalClients: "Barekisi",
->>>>>>> df70914 (feat: V2 invoice system with payment tracking)
       pendingQuotes: "E Letile",
       acceptedQuotes: "E Amohetsoe",
       recentQuotes: "Direkoto Tsa Morao",
@@ -215,11 +199,7 @@ export const translations = {
     },
 
     clients: {
-<<<<<<< HEAD
       title: "Bareki",
-=======
-      title: "Barekisi",
->>>>>>> df70914 (feat: V2 invoice system with payment tracking)
       addClient: "Kenyelletsa Moreki",
       editClient: "Fetola Moreki",
       noClients: "Ha ho na barekisi. Kenyelletsa wa pele.",
@@ -329,33 +309,21 @@ export const translations = {
         overdue: "E Fetile Nako",
       },
       amountDue: "Chelete e Hlokahalang",
-<<<<<<< HEAD
-      amountPaid: "Chelete e lefuoeng",
-=======
       amountPaid: "Chelete e Leshetsitsoeng",
->>>>>>> df70914 (feat: V2 invoice system with payment tracking)
       balance: "Chelete e Setseng",
       recordPayment: "Ngola Tefo",
       payments: "Ditefo",
       noPayments: "Ha ho ditefo tse ngotsoeng.",
       paymentAmount: "Chelete ya Tefo",
       paymentDate: "Letsatsi la Tefo",
-<<<<<<< HEAD
       paymentMethod: "Tsela ya Tefo",
-=======
-      paymentMethod: "Tsela",
->>>>>>> df70914 (feat: V2 invoice system with payment tracking)
       paymentNote: "Litemane (e sa hlokahaleng)",
       paymentMethods: ["Tjhelete", "EcoCash", "M-Pesa", "Phapanyetsano ya Banka", "Cheque", "Tse Ding"],
       savePayment: "Boloka Tefo",
       deletePayment: "Hlakola",
       confirmDeletePayment: "Tlosa rekoto ena ya tefo?",
       fromQuote: "Ho Tsoa Rekotong",
-<<<<<<< HEAD
-      paidInFull: "E patetswe kaofela ✓",
-=======
       paidInFull: "E Leshetsoe Katleho ✓",
->>>>>>> df70914 (feat: V2 invoice system with payment tracking)
       noInvoices: "Ha ho diinvoice.",
       convertHint: "Amohela rekoto ebe o tobetsa 'Fetola ho Invoice'.",
       confirmDelete: "Hlakola invoice ena?",
@@ -364,11 +332,7 @@ export const translations = {
 
     common: {
       save: "Boloka",
-<<<<<<< HEAD
-      cancel: "tlohela",
-=======
       cancel: "Hlohola",
->>>>>>> df70914 (feat: V2 invoice system with payment tracking)
       delete: "Hlakola",
       edit: "Fetola",
       back: "Morao",
@@ -376,22 +340,12 @@ export const translations = {
       currency: "M",
       search: "Batla...",
       required: "Tshwanelo e hlokeha",
-<<<<<<< HEAD
-      noResults: "Ha ho sere se fumanehang",
-      confirm: "Tiisa",
-      yes: "Eeya",
-      no: "che",
-=======
       noResults: "Ha ho seha se fumanehang",
       confirm: "Tiisa",
       yes: "Ee",
       no: "Tjhe",
->>>>>>> df70914 (feat: V2 invoice system with payment tracking)
       language: "Puo",
       settings: "Maemo",
     }
   }
 };
-
-// NOTE: This export patch adds invoice translations.
-// Replace the existing translations object export with the one in translations.full.js
