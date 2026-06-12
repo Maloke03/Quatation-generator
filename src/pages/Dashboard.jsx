@@ -1,23 +1,30 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { getAllQuotes, getAllClients } from '../db';
-import { formatCurrency, formatDate } from '../utils/format';
+import { getAllQuotes, getAllClients, getAllInvoices } from '../db';
+import { formatCurrency, formatDate, calcPaid } from '../utils/format';
 import { Card, EmptyState, StatusBadge, Button, TopBar } from '../components/UI';
-import { FileText, Users, Clock, CheckCircle } from 'lucide-react';
+import { FileText, Users, Clock, CheckCircle, Receipt, ChevronRight } from 'lucide-react';
 
 export default function Dashboard({ navigate }) {
   const { t } = useLang();
   const [quotes, setQuotes] = useState([]);
   const [clients, setClients] = useState([]);
+  const [invoices, setInvoices] = useState([]);
 
   useEffect(() => {
     getAllQuotes().then(setQuotes);
     getAllClients().then(setClients);
+    getAllInvoices().then(setInvoices);
   }, []);
 
   const pending = quotes.filter(q => q.status === 'draft' || q.status === 'sent');
   const accepted = quotes.filter(q => q.status === 'accepted');
   const recent = quotes.slice(0, 5);
+
+  const outstanding = invoices.reduce(
+    (sum, inv) => sum + Math.max(0, (inv.grandTotal || 0) - calcPaid(inv.payments)),
+    0
+  );
 
   const stats = [
     { label: t.dashboard.totalQuotes, value: quotes.length, icon: FileText, color: '#4ade80' },
@@ -39,6 +46,22 @@ export default function Dashboard({ navigate }) {
       <div className="p-4 flex flex-col gap-5 pb-24">
         {/* Tagline */}
         <p className="text-green-400/70 text-sm font-medium">{t.appTagline}</p>
+
+        {/* Outstanding invoices */}
+        {invoices.length > 0 && (
+          <Card onClick={() => navigate('invoices')}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <Receipt size={22} color="#fbbf24" className="opacity-80 shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-xs text-gray-500">{t.invoice.outstanding}</div>
+                  <div className="text-xl font-bold text-amber-400 truncate">{formatCurrency(outstanding)}</div>
+                </div>
+              </div>
+              <ChevronRight size={18} className="text-gray-600 shrink-0" />
+            </div>
+          </Card>
+        )}
 
         {/* Stats grid */}
         <div className="grid grid-cols-2 gap-3">

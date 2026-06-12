@@ -1,7 +1,7 @@
 // IndexedDB wrapper using native browser API (no external dependency)
 
 const DB_NAME = 'quotepro_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let _db = null;
 
@@ -24,6 +24,12 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings');
+      }
+      if (!db.objectStoreNames.contains('invoices')) {
+        const inv = db.createObjectStore('invoices', { keyPath: 'id' });
+        inv.createIndex('clientId', 'clientId');
+        inv.createIndex('quoteId', 'quoteId');
+        inv.createIndex('createdAt', 'createdAt');
       }
     };
   });
@@ -170,3 +176,121 @@ export async function setSetting(key, value) {
     req.onerror = () => reject(req.error);
   });
 }
+
+// ─── INVOICES ──────────────────────────────────────────────────────────────
+
+export async function getAllInvoices() {
+  const invoices = await getAll('invoices');
+  return invoices.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+export async function getInvoice(id) {
+  return tx('invoices', 'readonly', store => store.get(id));
+}
+
+export async function getInvoiceByQuote(quoteId) {
+  const all = await getAll('invoices');
+  return all.find(inv => inv.quoteId === quoteId) || null;
+}
+
+function paymentsTotal(payments) {
+  return (payments || []).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+}
+
+function invoiceStatus(grandTotal, payments) {
+  const paid = paymentsTotal(payments);
+  if (paid <= 0) return 'unpaid';
+  if (paid + 0.001 >= grandTotal) return 'paid';
+  return 'partial';
+}
+
+export async function createInvoiceFromQuote(quote, grandTotal, dueDays = 30) {
+  const existing = await getInvoiceByQuote(quote.id);
+  if (existing) return existing;
+  const now = new Date().toISOString();
+  const db = await openDB();
+  const invoice = await new Promise((resolve, reject) => {
+    const t = db.transaction('invoices', 'readwrite');
+    const store = t.objectStore('invoices');
+    const allReq = store.getAll();
+    allReq.onsuccess = () => {
+      const all = allReq.result;
+      const year = new Date().getFullYear();
+      const count = all.filter(i => i.invoiceNumber?.startsWith(`INV-${year}`)).length + 1;
+      const invoiceNumber = `INV-${year}-${String(count).padStart(3, '0')}`;
+      const due = new Date();
+      due.setDate(due.getDate() + dueDays);
+      const newInvoice = {
+        id: generateId(),
+        invoiceNumber,
+        quoteId: quote.id,
+        quoteNumber: quote.quoteNumber,
+        clientId: quote.clientId,
+        projectName: quote.projectName,
+        items: quote.items || [],
+        includeVat: !!quote.includeVat,
+        terms: quote.terms || '',
+        notes: quote.notes || '',
+        grandTotal: grandTotal,
+        date: now.split('T')[0],
+        dueDate: due.toISOString().split('T')[0],
+        payments: [],
+        status: 'unpaid',
+        createdAt: now,
+        updatedAt: now,
+      };
+      const putReq = store.put(newInvoice);
+      putReq.onsuccess = () => resolve(newInvoice);
+      putReq.onerror = () => reject(putReq.error);
+    };
+    allReq.onerror = () => reject(allReq.error);
+  });
+  return invoice;
+}
+
+export async function addPayment(invoiceId, payment) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction('invoices', 'readwrite');
+    const store = t.objectStore('invoices');
+    const getReq = store.get(invoiceId);
+    getReq.onsuccess = () => {
+      const invoice = getReq.result;
+      if (!invoice) { reject(new Error('Invoice not found')); return; }
+      const payments = [
+        ...(invoice.payments || []),
+        { id: generateId(), amount: parseFloat(payment.amount) || 0, date: payment.date, method: payment.method || '', note: payment.note || '' },
+      ];
+      const updated = { ...invoice, payments, status: invoiceStatus(invoice.grandTotal, payments), updatedAt: new Date().toISOString() };
+      const putReq = store.put(updated);
+      putReq.onsuccess = () => resolve(updated);
+      putReq.onerror = () => reject(putReq.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
+  });
+}
+
+export async function deletePayment(invoiceId, paymentId) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction('invoices', 'readwrite');
+    const store = t.objectStore('invoices');
+    const getReq = store.get(invoiceId);
+    getReq.onsuccess = () => {
+      const invoice = getReq.result;
+      if (!invoice) { reject(new Error('Invoice not found')); return; }
+      const payments = (invoice.payments || []).filter(p => p.id !== paymentId);
+      const updated = { ...invoice, payments, status: invoiceStatus(invoice.grandTotal, payments), updatedAt: new Date().toISOString() };
+      const putReq = store.put(updated);
+      putReq.onsuccess = () => resolve(updated);
+      putReq.onerror = () => reject(putReq.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
+  });
+}
+
+export async function deleteInvoice(id) {
+  return tx('invoices', 'readwrite', store => store.delete(id));
+}
+
+export { paymentsTotal };

@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { getQuote, getClient, updateQuoteStatus } from '../db';
+import { getQuote, getClient, updateQuoteStatus, getInvoiceByQuote, createInvoiceFromQuote } from '../db';
 import { formatCurrency, formatDate, calcSubtotal, calcVAT, calcGrandTotal } from '../utils/format';
-import { Button, StatusBadge, TopBar, Card } from '../components/UI';
-import { ChevronLeft, Pencil, Printer, CheckCircle, XCircle, Send } from 'lucide-react';
+import { Button, StatusBadge, TopBar, Card, Confirm } from '../components/UI';
+import { ChevronLeft, Pencil, Printer, CheckCircle, XCircle, Send, Receipt } from 'lucide-react';
 
 export default function QuoteView({ navigate, params = {} }) {
   const { t } = useLang();
   const [quote, setQuote] = useState(null);
   const [client, setClient] = useState(null);
+  const [invoice, setInvoice] = useState(null);
+  const [convertOpen, setConvertOpen] = useState(false);
+  const [converting, setConverting] = useState(false);
 
   async function load() {
     const q = await getQuote(params.quoteId);
     if (!q) { navigate('quotes'); return; }
     setQuote(q);
     if (q.clientId) getClient(q.clientId).then(setClient);
+    getInvoiceByQuote(q.id).then(setInvoice);
   }
 
   useEffect(() => { load(); }, [params.quoteId]);
@@ -30,6 +34,17 @@ export default function QuoteView({ navigate, params = {} }) {
   async function changeStatus(status) {
     await updateQuoteStatus(quote.id, status);
     load();
+  }
+
+  async function handleConvert() {
+    setConverting(true);
+    try {
+      const inv = await createInvoiceFromQuote(quote, grandTotal);
+      navigate('invoice-view', { invoiceId: inv.id });
+    } finally {
+      setConverting(false);
+      setConvertOpen(false);
+    }
   }
 
   const statusActions = {
@@ -174,6 +189,26 @@ export default function QuoteView({ navigate, params = {} }) {
           </div>
         )}
 
+        {/* Invoice conversion */}
+        {invoice ? (
+          <Button
+            onClick={() => navigate('invoice-view', { invoiceId: invoice.id })}
+            size="lg"
+            className="w-full"
+          >
+            <Receipt size={18} /> {t.invoice.viewInvoice} ({invoice.invoiceNumber})
+          </Button>
+        ) : quote.status === 'accepted' ? (
+          <Button
+            onClick={() => setConvertOpen(true)}
+            disabled={converting}
+            size="lg"
+            className="w-full"
+          >
+            <Receipt size={18} /> {t.invoice.convert}
+          </Button>
+        ) : null}
+
         {/* Print button */}
         <Button
           onClick={() => navigate('quote-print', { quoteId: quote.id })}
@@ -184,6 +219,13 @@ export default function QuoteView({ navigate, params = {} }) {
           <Printer size={18} /> {t.print.print}
         </Button>
       </div>
+
+      <Confirm
+        open={convertOpen}
+        message={t.invoice.convertConfirm}
+        onConfirm={handleConvert}
+        onCancel={() => setConvertOpen(false)}
+      />
     </div>
   );
 }

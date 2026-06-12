@@ -17,13 +17,19 @@ Win more jobs. Quote in minutes. Works offline.
 - ✅ Installable PWA (works on Android & iOS)
 - ✅ Common items autocomplete (cement, bricks, labour, etc.)
 
+## Features (V2)
+- ✅ Convert an accepted quotation into an invoice in one tap (INV-YYYY-NNN)
+- ✅ Invoice payment tracking (Unpaid → Part-Paid → Paid) with payment history
+- ✅ Branded invoice print/PDF layout with balance due and PAID stamp
+- ✅ Outstanding-balance summary on the dashboard
+
 ---
 
 ## Tech Stack
 | Layer | Technology |
 |-------|-----------|
 | UI | React 18, Tailwind CSS |
-| Storage | IndexedDB via `idb` |
+| Storage | IndexedDB (native browser API, no dependency) |
 | Offline | Service Worker (cache-first) |
 | Install | PWA manifest |
 | Print/PDF | Browser `window.print()` |
@@ -139,7 +145,7 @@ quotepro/
 │   ├── icon-192.png     # App icon (YOU MUST ADD)
 │   └── icon-512.png     # App icon (YOU MUST ADD)
 ├── src/
-│   ├── db/index.js      # IndexedDB (clients, quotes, settings)
+│   ├── db/index.js      # IndexedDB (clients, quotes, invoices, settings)
 │   ├── i18n/
 │   │   ├── translations.js   # English + Sesotho strings
 │   │   └── LangContext.js    # Language hook
@@ -153,6 +159,9 @@ quotepro/
 │   │   ├── QuoteBuilder.jsx  # ← Core feature
 │   │   ├── QuoteView.jsx
 │   │   ├── QuotePrint.jsx    # Print/PDF layout
+│   │   ├── Invoices.jsx      # Invoice list
+│   │   ├── InvoiceView.jsx   # Invoice + payment tracking
+│   │   ├── InvoicePrint.jsx  # Invoice print/PDF layout
 │   │   └── Settings.jsx
 │   ├── utils/format.js  # Currency, date, calc helpers
 │   ├── App.js           # Router
@@ -164,8 +173,8 @@ quotepro/
 
 ---
 
-## Roadmap (V2 ideas)
-- [ ] Convert Quotation → Invoice (one tap)
+## Roadmap
+- [x] Convert Quotation → Invoice (one tap)
 - [ ] Material price database (save common prices)
 - [ ] Labour cost calculator
 - [ ] Expense tracking vs quoted amount

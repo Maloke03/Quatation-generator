@@ -1,56 +1,49 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { getAllQuotes, getAllClients, deleteQuote } from '../db';
-import { formatCurrency, formatDate, calcSubtotal, calcGrandTotal } from '../utils/format';
-import { Card, Button, StatusBadge, EmptyState, Confirm, TopBar } from '../components/UI';
-import { Plus, Search, Trash2 } from 'lucide-react';
+import { getAllInvoices, getAllClients, deleteInvoice } from '../db';
+import { formatCurrency, formatDate, calcPaid } from '../utils/format';
+import { Card, EmptyState, Confirm, TopBar, InvoiceStatusBadge } from '../components/UI';
+import { Search, Trash2 } from 'lucide-react';
 
-export default function Quotes({ navigate }) {
+export default function Invoices({ navigate }) {
   const { t } = useLang();
-  const [quotes, setQuotes] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState({});
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [confirmId, setConfirmId] = useState(null);
 
   async function load() {
-    const [qs, cls] = await Promise.all([getAllQuotes(), getAllClients()]);
+    const [invs, cls] = await Promise.all([getAllInvoices(), getAllClients()]);
     const clientMap = {};
     cls.forEach(c => { clientMap[c.id] = c; });
-    setQuotes(qs);
+    setInvoices(invs);
     setClients(clientMap);
   }
 
   useEffect(() => { load(); }, []);
 
-  const statuses = ['all', 'draft', 'sent', 'accepted', 'rejected'];
+  const statuses = ['all', 'unpaid', 'partial', 'paid'];
 
-  const filtered = quotes.filter(q => {
-    const client = clients[q.clientId];
+  const filtered = invoices.filter(inv => {
+    const client = clients[inv.clientId];
     const matchSearch =
-      q.projectName?.toLowerCase().includes(search.toLowerCase()) ||
-      q.quoteNumber?.toLowerCase().includes(search.toLowerCase()) ||
+      inv.projectName?.toLowerCase().includes(search.toLowerCase()) ||
+      inv.invoiceNumber?.toLowerCase().includes(search.toLowerCase()) ||
       client?.name?.toLowerCase().includes(search.toLowerCase());
-    const matchFilter = filter === 'all' || q.status === filter;
+    const matchFilter = filter === 'all' || inv.status === filter;
     return matchSearch && matchFilter;
   });
 
   async function handleDelete() {
-    await deleteQuote(confirmId);
+    await deleteInvoice(confirmId);
     setConfirmId(null);
     load();
   }
 
   return (
     <div className="flex flex-col min-h-full">
-      <TopBar
-        title={t.quote.title}
-        right={
-          <Button size="sm" onClick={() => navigate('quote-new')}>
-            <Plus size={16} /> {t.nav.newQuote}
-          </Button>
-        }
-      />
+      <TopBar title={t.invoice.title} />
       <div className="p-4 flex flex-col gap-4 pb-24">
         {/* Search */}
         <div className="relative">
@@ -75,45 +68,45 @@ export default function Quotes({ navigate }) {
                   : 'bg-[#1e3a2a] text-gray-400 border border-[#2d5a3d]'
               }`}
             >
-              {s === 'all' ? t.common.all : t.quote.statuses[s]}
+              {s === 'all' ? t.common.all : t.invoice.statuses[s]}
             </button>
           ))}
         </div>
 
-        {/* Quote list */}
+        {/* Invoice list */}
         {filtered.length === 0 ? (
           <EmptyState
-            icon="📄"
-            title={quotes.length === 0 ? t.dashboard.noQuotes : t.common.noResults}
-            action={quotes.length === 0 && (
-              <Button onClick={() => navigate('quote-new')}>
-                <Plus size={16} /> {t.nav.newQuote}
-              </Button>
-            )}
+            icon="🧾"
+            title={invoices.length === 0 ? t.invoice.noInvoices : t.common.noResults}
           />
         ) : (
           <div className="flex flex-col gap-2">
-            {filtered.map(q => {
-              const client = clients[q.clientId];
-              const subtotal = calcSubtotal(q.items || []);
-              const total = calcGrandTotal(subtotal, q.includeVat);
+            {filtered.map(inv => {
+              const client = clients[inv.clientId];
+              const paid = calcPaid(inv.payments);
+              const balance = Math.max(0, (inv.grandTotal || 0) - paid);
               return (
-                <Card key={q.id} onClick={() => navigate('quote-view', { quoteId: q.id })}>
+                <Card key={inv.id} onClick={() => navigate('invoice-view', { invoiceId: inv.id })}>
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-white text-sm">{q.quoteNumber}</span>
-                        <StatusBadge status={q.status} />
+                        <span className="font-bold text-white text-sm">{inv.invoiceNumber}</span>
+                        <InvoiceStatusBadge status={inv.status} />
                       </div>
-                      <div className="text-sm text-gray-300 mt-0.5 truncate">{q.projectName || '—'}</div>
+                      <div className="text-sm text-gray-300 mt-0.5 truncate">{inv.projectName || '—'}</div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {client?.name || '—'} · {formatDate(q.createdAt)}
+                        {client?.name || '—'} · {formatDate(inv.createdAt)}
                       </div>
                     </div>
                     <div className="text-right shrink-0 flex flex-col items-end gap-1">
-                      <div className="text-green-400 font-bold">{formatCurrency(total)}</div>
+                      <div className="text-green-400 font-bold">{formatCurrency(inv.grandTotal)}</div>
+                      {balance > 0 ? (
+                        <div className="text-[11px] text-amber-400">{t.invoice.balance}: {formatCurrency(balance)}</div>
+                      ) : (
+                        <div className="text-[11px] text-green-500">{t.invoice.statuses.paid}</div>
+                      )}
                       <button
-                        onClick={e => { e.stopPropagation(); setConfirmId(q.id); }}
+                        onClick={e => { e.stopPropagation(); setConfirmId(inv.id); }}
                         className="text-gray-600 hover:text-red-400 p-1"
                       >
                         <Trash2 size={14} />
@@ -129,7 +122,7 @@ export default function Quotes({ navigate }) {
 
       <Confirm
         open={!!confirmId}
-        message={t.quote.confirmDelete}
+        message={t.invoice.confirmDelete}
         onConfirm={handleDelete}
         onCancel={() => setConfirmId(null)}
       />

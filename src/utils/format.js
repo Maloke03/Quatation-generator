@@ -50,3 +50,16 @@ export function statusColor(status) {
   };
   return map[status] || map.draft;
 }
+
+export function invoiceStatusColor(status) {
+  const map = {
+    unpaid: { bg: '#3a1a1a', text: '#f87171', border: '#5a2d2d' },
+    partial: { bg: '#3a2e1a', text: '#fbbf24', border: '#5a4a2d' },
+    paid: { bg: '#1a3a1a', text: '#4ade80', border: '#2d5a2d' },
+  };
+  return map[status] || map.unpaid;
+}
+
+export function calcPaid(payments) {
+  return (payments || []).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+}

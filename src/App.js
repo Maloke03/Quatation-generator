@@ -6,10 +6,13 @@ import Quotes from './pages/Quotes';
 import QuoteBuilder from './pages/QuoteBuilder';
 import QuoteView from './pages/QuoteView';
 import QuotePrint from './pages/QuotePrint';
+import Invoices from './pages/Invoices';
+import InvoiceView from './pages/InvoiceView';
+import InvoicePrint from './pages/InvoicePrint';
 import Settings from './pages/Settings';
 import BottomNav from './components/BottomNav';
 
-const MAIN_TABS = ['dashboard', 'clients', 'quotes', 'settings'];
+const MAIN_TABS = ['dashboard', 'clients', 'quotes', 'invoices', 'settings'];
 
 export default function App() {
   const [route, setRoute] = useState({ page: 'dashboard', params: {} });
@@ -21,7 +24,7 @@ export default function App() {
 
   const { page, params } = route;
   const currentTab = MAIN_TABS.includes(page) ? page : null;
-  const isPrint = page === 'quote-print';
+  const isPrint = page === 'quote-print' || page === 'invoice-print';
 
   function renderPage() {
     switch (page) {
@@ -32,6 +35,9 @@ export default function App() {
       case 'quote-edit': return <QuoteBuilder navigate={navigate} params={{ ...params, quoteId: params.quoteId }} />;
       case 'quote-view': return <QuoteView navigate={navigate} params={params} />;
       case 'quote-print': return <QuotePrint navigate={navigate} params={params} />;
+      case 'invoices': return <Invoices navigate={navigate} />;
+      case 'invoice-view': return <InvoiceView navigate={navigate} params={params} />;
+      case 'invoice-print': return <InvoicePrint navigate={navigate} params={params} />;
       case 'settings': return <Settings navigate={navigate} />;
       default: return <Dashboard navigate={navigate} />;
     }
