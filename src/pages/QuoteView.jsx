@@ -1,23 +1,54 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { getQuote, getClient, updateQuoteStatus } from '../db';
-import { formatCurrency, formatDate, calcSubtotal, calcVAT, calcGrandTotal } from '../utils/format';
-import { Button, StatusBadge, TopBar, Card } from '../components/UI';
-import { ChevronLeft, Pencil, Printer, CheckCircle, XCircle, Send } from 'lucide-react';
+import { getQuote, getClient, updateQuoteStatus, getInvoiceByQuote, saveInvoice } from '../db';
+import { formatCurrency, formatDate, calcSubtotal, calcVAT, calcGrandTotal, futureDate } from '../utils/format';
+import { Button, StatusBadge, TopBar, Card, Confirm } from '../components/UI';
+import { ChevronLeft, Pencil, Printer, CheckCircle, XCircle, Send, FileCheck } from 'lucide-react';
 
 export default function QuoteView({ navigate, params = {} }) {
   const { t } = useLang();
   const [quote, setQuote] = useState(null);
   const [client, setClient] = useState(null);
+  const [existingInvoice, setExistingInvoice] = useState(null);
+  const [convertConfirmOpen, setConvertConfirmOpen] = useState(false);
+  const [converting, setConverting] = useState(false);
 
   async function load() {
     const q = await getQuote(params.quoteId);
     if (!q) { navigate('quotes'); return; }
     setQuote(q);
     if (q.clientId) getClient(q.clientId).then(setClient);
+    // Check if an invoice already exists for this quote
+    getInvoiceByQuote(q.id).then(setExistingInvoice);
   }
 
   useEffect(() => { load(); }, [params.quoteId]);
+
+  async function handleConvertToInvoice() {
+    setConverting(true);
+    try {
+      const subtotal = calcSubtotal(quote.items || []);
+      const grandTotal = calcGrandTotal(subtotal, quote.includeVat);
+      const invoice = await saveInvoice({
+        quoteId: quote.id,
+        quoteNumber: quote.quoteNumber,
+        clientId: quote.clientId,
+        projectName: quote.projectName,
+        items: quote.items,
+        subtotal,
+        grandTotal,
+        includeVat: quote.includeVat,
+        date: new Date().toISOString().split('T')[0],
+        dueDate: futureDate(30),
+        terms: quote.terms,
+        notes: quote.notes,
+      });
+      navigate('invoice-view', { invoiceId: invoice.id });
+    } finally {
+      setConverting(false);
+      setConvertConfirmOpen(false);
+    }
+  }
 
   if (!quote) {
     return <div className="flex items-center justify-center h-full text-gray-500 py-20">{t.common.loading}</div>;
@@ -84,6 +115,29 @@ export default function QuoteView({ navigate, params = {} }) {
             })}
           </div>
         </div>
+
+        {/* Invoice conversion */}
+        {quote.status === 'accepted' && (
+          <div className="bg-[#1a2e1a] border border-[#2d5a2d] rounded-2xl p-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-green-300">
+                {existingInvoice ? t.invoice.alreadyInvoiced : t.invoice.convertFromQuote}
+              </div>
+              {existingInvoice && (
+                <div className="text-xs text-gray-500 mt-0.5">{existingInvoice.invoiceNumber}</div>
+              )}
+            </div>
+            {existingInvoice ? (
+              <Button size="sm" onClick={() => navigate('invoice-view', { invoiceId: existingInvoice.id })}>
+                <FileCheck size={14} /> {t.invoice.viewInvoice}
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => setConvertConfirmOpen(true)} disabled={converting}>
+                <FileCheck size={14} /> {t.invoice.convertFromQuote}
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Client + project */}
         <Card>
@@ -184,6 +238,13 @@ export default function QuoteView({ navigate, params = {} }) {
           <Printer size={18} /> {t.print.print}
         </Button>
       </div>
+      {/* Convert to Invoice confirm */}
+      <Confirm
+        open={convertConfirmOpen}
+        message={t.invoice.convertConfirm}
+        onConfirm={handleConvertToInvoice}
+        onCancel={() => setConvertConfirmOpen(false)}
+      />
     </div>
   );
 }

@@ -1,11 +1,12 @@
 import { useLang } from '../i18n/LangContext';
-import { LayoutDashboard, Users, FileText, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Receipt, Settings } from 'lucide-react';
 
 const tabs = [
   { key: 'dashboard', icon: LayoutDashboard },
-  { key: 'clients', icon: Users },
-  { key: 'quotes', icon: FileText },
-  { key: 'settings', icon: Settings },
+  { key: 'clients',   icon: Users },
+  { key: 'quotes',    icon: FileText },
+  { key: 'invoices',  icon: Receipt },
+  { key: 'settings',  icon: Settings },
 ];
 
 export default function BottomNav({ current, navigate }) {
@@ -13,9 +14,10 @@ export default function BottomNav({ current, navigate }) {
 
   const labels = {
     dashboard: t.nav.dashboard,
-    clients: t.nav.clients,
-    quotes: t.nav.quotes,
-    settings: t.common.settings,
+    clients:   t.nav.clients,
+    quotes:    t.nav.quotes,
+    invoices:  t.invoice?.title || 'Invoices',
+    settings:  t.common.settings,
   };
 
   return (
@@ -30,8 +32,8 @@ export default function BottomNav({ current, navigate }) {
               active ? 'text-green-400' : 'text-gray-600 hover:text-gray-400'
             }`}
           >
-            <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
-            <span className="text-[10px] font-medium">{labels[key]}</span>
+            <Icon size={21} strokeWidth={active ? 2.5 : 1.8} />
+            <span className="text-[9px] font-medium leading-none">{labels[key]}</span>
           </button>
         );
       })}

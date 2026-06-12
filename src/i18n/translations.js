@@ -8,6 +8,7 @@ export const translations = {
       dashboard: "Dashboard",
       clients: "Clients",
       quotes: "Quotations",
+      invoices: "Invoices",
       newQuote: "New Quote",
     },
 
@@ -21,6 +22,7 @@ export const translations = {
       recentQuotes: "Recent Quotations",
       noQuotes: "No quotations yet. Create your first one!",
       createFirst: "Create First Quote",
+      outstanding: "Outstanding Balance",
     },
 
     // Clients
@@ -119,6 +121,47 @@ export const translations = {
       thankYou: "Thank you for your business.",
     },
 
+    // Invoice
+    invoice: {
+      title: "Invoices",
+      invoice: "INVOICE",
+      newInvoice: "New Invoice",
+      convertFromQuote: "Convert to Invoice",
+      convertConfirm: "Create an invoice from this quotation?",
+      alreadyInvoiced: "Invoice already created",
+      viewInvoice: "View Invoice",
+      invoiceNumber: "Invoice No.",
+      dueDate: "Due Date",
+      paymentTerms: "Payment Terms",
+      paymentTermsDefault: "Payment due within 30 days of invoice date.",
+      statuses: {
+        unpaid: "Unpaid",
+        partial: "Partial",
+        paid: "Paid",
+        overdue: "Overdue",
+      },
+      amountDue: "Amount Due",
+      amountPaid: "Amount Paid",
+      balance: "Balance",
+      recordPayment: "Record Payment",
+      payments: "Payments",
+      noPayments: "No payments recorded yet.",
+      paymentAmount: "Payment Amount",
+      paymentDate: "Payment Date",
+      paymentMethod: "Method",
+      paymentNote: "Note (optional)",
+      paymentMethods: ["Cash", "EcoCash", "M-Pesa", "Bank Transfer", "Cheque", "Other"],
+      savePayment: "Save Payment",
+      deletePayment: "Delete",
+      confirmDeletePayment: "Remove this payment record?",
+      fromQuote: "From Quotation",
+      paidInFull: "Paid in Full ✓",
+      noInvoices: "No invoices yet.",
+      convertHint: "Accept a quotation and tap 'Convert to Invoice'.",
+      confirmDelete: "Delete this invoice?",
+      delete: "Delete",
+    },
+
     // Common
     common: {
       save: "Save",
@@ -147,6 +190,7 @@ export const translations = {
       dashboard: "Lapeng",
       clients: "Barekisi",
       quotes: "Direkoto",
+      invoices: "Diinvoice",
       newQuote: "Rekoto Entsha",
     },
 
@@ -159,6 +203,7 @@ export const translations = {
       recentQuotes: "Direkoto Tsa Morao",
       noQuotes: "Ha ho na direkoto. Etsa ya pele!",
       createFirst: "Etsa Rekoto ya Pele",
+      outstanding: "Chelete e Leng Teng",
     },
 
     clients: {
@@ -253,6 +298,46 @@ export const translations = {
       thankYou: "Re leboha khoebo ya hao.",
     },
 
+    invoice: {
+      title: "Diinvoice",
+      invoice: "INVOICE",
+      newInvoice: "Invoice e Ncha",
+      convertFromQuote: "Fetola ho Invoice",
+      convertConfirm: "Etsa invoice ho tsoa rekotong ena?",
+      alreadyInvoiced: "Invoice e se e entsoe",
+      viewInvoice: "Sheba Invoice",
+      invoiceNumber: "Nomoro ya Invoice",
+      dueDate: "Letsatsi la Tefo",
+      paymentTerms: "Dipehelo tsa Tefo",
+      paymentTermsDefault: "Tefo e hlokeha matsatsi a 30 ka mora letsatsi la invoice.",
+      statuses: {
+        unpaid: "Ha e Leshetsoe",
+        partial: "E Leshetsoe Karolo",
+        paid: "E Leshetsoe",
+        overdue: "E Fetile Nako",
+      },
+      amountDue: "Chelete e Hlokahalang",
+      amountPaid: "Chelete e Leshetsitsoeng",
+      balance: "Chelete e Setseng",
+      recordPayment: "Ngola Tefo",
+      payments: "Ditefo",
+      noPayments: "Ha ho ditefo tse ngotsoeng.",
+      paymentAmount: "Chelete ya Tefo",
+      paymentDate: "Letsatsi la Tefo",
+      paymentMethod: "Tsela",
+      paymentNote: "Litemane (e sa hlokahaleng)",
+      paymentMethods: ["Tjhelete", "EcoCash", "M-Pesa", "Phapanyetsano ya Banka", "Cheque", "Tse Ding"],
+      savePayment: "Boloka Tefo",
+      deletePayment: "Hlakola",
+      confirmDeletePayment: "Tlosa rekoto ena ya tefo?",
+      fromQuote: "Ho Tsoa Rekotong",
+      paidInFull: "E Leshetsoe Katleho ✓",
+      noInvoices: "Ha ho diinvoice.",
+      convertHint: "Amohela rekoto ebe o tobetsa 'Fetola ho Invoice'.",
+      confirmDelete: "Hlakola invoice ena?",
+      delete: "Hlakola",
+    },
+
     common: {
       save: "Boloka",
       cancel: "Hlohola",
@@ -272,3 +357,6 @@ export const translations = {
     }
   }
 };
+
+// NOTE: This export patch adds invoice translations.
+// Replace the existing translations object export with the one in translations.full.js

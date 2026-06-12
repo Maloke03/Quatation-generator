@@ -1,29 +1,33 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { getAllQuotes, getAllClients } from '../db';
+import { getAllQuotes, getAllClients, getAllInvoices } from '../db';
 import { formatCurrency, formatDate } from '../utils/format';
 import { Card, EmptyState, StatusBadge, Button, TopBar } from '../components/UI';
-import { FileText, Users, Clock, CheckCircle } from 'lucide-react';
+import { FileText, Users, Clock, AlertCircle } from 'lucide-react';
 
 export default function Dashboard({ navigate }) {
   const { t } = useLang();
   const [quotes, setQuotes] = useState([]);
   const [clients, setClients] = useState([]);
+  const [invoices, setInvoices] = useState([]);
 
   useEffect(() => {
     getAllQuotes().then(setQuotes);
     getAllClients().then(setClients);
+    getAllInvoices().then(setInvoices);
   }, []);
 
   const pending = quotes.filter(q => q.status === 'draft' || q.status === 'sent');
-  const accepted = quotes.filter(q => q.status === 'accepted');
   const recent = quotes.slice(0, 5);
+  const outstanding = invoices
+    .filter(i => i.status !== 'paid')
+    .reduce((sum, i) => sum + ((i.grandTotal || 0) - (i.amountPaid || 0)), 0);
 
   const stats = [
     { label: t.dashboard.totalQuotes, value: quotes.length, icon: FileText, color: '#4ade80' },
     { label: t.dashboard.totalClients, value: clients.length, icon: Users, color: '#60a5fa' },
     { label: t.dashboard.pendingQuotes, value: pending.length, icon: Clock, color: '#fbbf24' },
-    { label: t.dashboard.acceptedQuotes, value: accepted.length, icon: CheckCircle, color: '#34d399' },
+    { label: t.dashboard.outstanding || 'Outstanding', value: formatCurrency(outstanding), icon: AlertCircle, color: '#f87171' },
   ];
 
   return (
@@ -37,7 +41,6 @@ export default function Dashboard({ navigate }) {
         }
       />
       <div className="p-4 flex flex-col gap-5 pb-24">
-        {/* Tagline */}
         <p className="text-green-400/70 text-sm font-medium">{t.appTagline}</p>
 
         {/* Stats grid */}
@@ -48,10 +51,10 @@ export default function Dashboard({ navigate }) {
               <Card key={s.label}>
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="text-2xl font-bold text-white">{s.value}</div>
+                    <div className="text-2xl font-bold text-white truncate">{s.value}</div>
                     <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
                   </div>
-                  <Icon size={20} color={s.color} className="opacity-70 mt-0.5" />
+                  <Icon size={20} color={s.color} className="opacity-70 mt-0.5 shrink-0" />
                 </div>
               </Card>
             );
