@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #0a1810;
+  color: white;
+  font-family: 'Inter', sans-serif;
+  overscroll-behavior: none;
+}
+
+/* Hide scrollbar but allow scrolling */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Safe area bottom for phones with home bar */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Select / option dark styling */
+select option {
+  background: #0f2318;
+  color: white;
+}
+
+/* Input number — remove spinners */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] { -moz-appearance: textfield; }
+
+/* Print */
+@media print {
+  body {
+    background: white !important;
+    color: #111 !important;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+}
