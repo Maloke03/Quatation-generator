@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { getAllProjects, getProjectByQuote, saveProject } from '../db';
-import { TopBar, Card, Button, StatusBadge } from '../components/UI';
-import { ChevronLeft, Briefcase, Clock, CheckCircle, PlayCircle, Plus } from 'lucide-react';
+import { getAllProjects, updateProjectStatus } from '../db';
+import { TopBar, Card, Button } from '../components/UI';
+import { ChevronLeft, Briefcase, Clock, PlayCircle, CheckCircle } from 'lucide-react';
 
 export default function Projects({ navigate }) {
   const { t } = useLang();
@@ -28,9 +28,9 @@ export default function Projects({ navigate }) {
 
   const getStatusText = (status) => {
     switch(status) {
-      case 'not_started': return 'Not Started';
-      case 'in_progress': return 'In Progress';
-      case 'completed': return 'Completed';
+      case 'not_started': return t.projects?.notStarted || 'Not Started';
+      case 'in_progress': return t.projects?.inProgress || 'In Progress';
+      case 'completed': return t.projects?.completed || 'Completed';
       default: return status;
     }
   };
@@ -42,7 +42,7 @@ export default function Projects({ navigate }) {
   return (
     <div className="flex flex-col min-h-full pb-24">
       <TopBar
-        title="Projects"
+        title={t.projects?.title || 'Projects'}
         left={
           <button onClick={() => navigate('dashboard')} className="text-gray-400 hover:text-white mr-1">
             <ChevronLeft size={22} />
@@ -52,7 +52,7 @@ export default function Projects({ navigate }) {
 
       <div className="p-4 space-y-4">
         {/* Filter tabs */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {['all', 'not_started', 'in_progress', 'completed'].map(status => (
             <button
               key={status}
@@ -73,8 +73,8 @@ export default function Projects({ navigate }) {
           <Card>
             <div className="text-center py-8">
               <Briefcase size={48} className="mx-auto mb-3 text-gray-600" />
-              <p className="text-gray-400">No projects yet</p>
-              <p className="text-sm text-gray-500 mt-1">Accept a quote to create a project</p>
+              <p className="text-gray-400">{t.projects?.noProjects || 'No projects yet'}</p>
+              <p className="text-sm text-gray-500 mt-1">{t.projects?.acceptQuoteToCreate || 'Accept a quote to create a project'}</p>
             </div>
           </Card>
         ) : (

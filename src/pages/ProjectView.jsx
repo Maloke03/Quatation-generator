@@ -6,7 +6,7 @@ import {
   getTotalExpensesByProject, updateProjectStatus 
 } from '../db';
 import { TopBar, Card, Button, Confirm } from '../components/UI';
-import { ChevronLeft, Plus, Trash2, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
+import { ChevronLeft, Plus, Trash2, DollarSign } from 'lucide-react';
 
 export default function ProjectView({ navigate, params }) {
   const { t } = useLang();
@@ -93,7 +93,7 @@ export default function ProjectView({ navigate, params }) {
       <div className="p-4 space-y-4">
         {/* Status & Actions */}
         <Card>
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center flex-wrap gap-2">
             <div>
               <p className="text-xs text-gray-500">Status</p>
               <p className="text-white font-semibold mt-1">

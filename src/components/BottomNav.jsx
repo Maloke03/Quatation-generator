@@ -9,7 +9,7 @@ import {
   Briefcase
 } from 'lucide-react';
 
-// Define tabs with their configuration - using consistent structure
+// Define tabs with their configuration
 const tabs = [
   { key: 'dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
   { key: 'clients',   icon: Users,           labelKey: 'nav.clients' },
@@ -20,7 +20,7 @@ const tabs = [
   { key: 'settings',  icon: Settings,        labelKey: 'common.settings' }
 ];
 
-// Fallback labels in case translation keys are missing
+// Fallback labels
 const fallbackLabels = {
   'nav.dashboard': 'Dashboard',
   'nav.clients': 'Clients',
@@ -34,14 +34,11 @@ const fallbackLabels = {
 export default function BottomNav({ current, navigate }) {
   const { t } = useLang();
 
-  // Helper to get translation with fallback - with safe checking
   const getLabel = (key) => {
-    // If t is undefined or null, return fallback immediately
     if (!t || typeof t !== 'object') {
       return fallbackLabels[key] || key.split('.').pop();
     }
     
-    // Split nested keys like 'nav.dashboard' or 'invoice.title'
     const parts = key.split('.');
     let value = t;
     
