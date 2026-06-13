@@ -108,7 +108,7 @@ export default function InvoiceView({ navigate, params = {} }) {
     getPaymentsByInvoice(inv.id).then(setPayments);
   }
 
-  useEffect(() => { load(); }, [params.invoiceId]);
+  useEffect(() => { load(load); }, [params.invoiceId]);
 
   if (!invoice) {
     return <div className="flex items-center justify-center h-full text-gray-500 py-20">{t.common.loading}</div>;

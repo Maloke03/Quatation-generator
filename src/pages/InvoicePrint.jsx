@@ -14,7 +14,7 @@ export default function InvoicePrint({ navigate, params = {} }) {
 
   useEffect(() => {
     async function load() {
-      const [inv, comp] = await Promise.all([
+      const [inv, comp] = await Promise.all([navigate
         getInvoice(params.invoiceId),
         getSetting('company'),
       ]);

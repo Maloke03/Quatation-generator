@@ -5,7 +5,7 @@ const DB_VERSION = 4;
 
 let _db = null;
 let _dbInitPromise = null;
-let _isUpgrading = false;
+
 
 // Default materials for V3 (Lesotho construction)
 const DEFAULT_MATERIALS = [
