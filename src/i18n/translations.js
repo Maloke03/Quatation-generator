@@ -84,6 +84,7 @@ export const translations = {
       delete: "Delete",
       markAs: "Mark as",
       companyDetails: "Your Company Details",
+      pickFromPriceList: "Pick from Price List",
     },
 
     company: {
@@ -155,6 +156,71 @@ export const translations = {
       delete: "Delete",
     },
 
+    materials: {
+      title: "Material Price Database",
+      addMaterial: "Add Material",
+      editMaterial: "Edit Material",
+      materialName: "Material Name",
+      selectCategory: "Select Category",
+      pricePerUnit: "Price per Unit",
+      unit: "Unit (e.g., bag, meter, sheet)",
+      category: "Category",
+      categories: {
+        building: "Building",
+        aggregates: "Aggregates",
+        roofing: "Roofing",
+        timber: "Timber",
+        finishing: "Finishing",
+        fittings: "Fittings",
+        other: "Other",
+      },
+      confirmDelete: "Delete this material?",
+    },
+
+    labour: {
+      calculator: "Labour Cost Calculator",
+      worker: "Worker",
+      selectRole: "Select Role",
+      roles: {
+        general: "General Labourer",
+        skilled: "Skilled Labourer",
+        foreman: "Foreman",
+        electrician: "Electrician",
+        plumber: "Plumber",
+      },
+      dailyRate: "Daily Rate (M)",
+      numberOfDays: "Number of Days",
+      addWorker: "Add Worker",
+      totalCost: "Total Labour Cost",
+      labour: "Labour",
+      days: "days",
+      addToQuote: "Add to Quote",
+      addedToQuote: "Labour items added to your quote!",
+    },
+
+    projects: {
+      title: "Projects",
+      notStarted: "Not Started",
+      inProgress: "In Progress",
+      completed: "Completed",
+      createProject: "Create Project",
+      viewProject: "View Project",
+      financialSummary: "Financial Summary",
+      quotedAmount: "Quoted Amount",
+      totalExpenses: "Total Expenses",
+      profitLoss: "Profit / Loss",
+      profitMargin: "Profit Margin",
+      expenses: "Expenses",
+      addExpense: "Add Expense",
+      description: "Description",
+      amount: "Amount",
+      category: "Category",
+      date: "Date",
+      noExpenses: "No expenses recorded yet",
+      noProjects: "No projects yet",
+      acceptQuoteToCreate: "Accept a quote to create a project",
+    },
+
     common: {
       save: "Save",
       cancel: "Cancel",
@@ -171,7 +237,8 @@ export const translations = {
       no: "No",
       language: "Language",
       settings: "Settings",
-    }
+      tools: "Tools",
+    },
   },
 
   st: {
@@ -249,7 +316,7 @@ export const translations = {
         accepted: "E Amohetsoe",
         rejected: "E Hanelooe",
       },
-      noItems: "Kenya ntho e le nngoe bonyane rekotong.",
+      noItems: "Kenya ntho e le nngwe bonyane rekotong.",
       noClient: "Kgetha moreki pele.",
       units: ["m²", "m³", "m", "dibeke", "dintho", "tonne", "dilitara", "dihora", "matsatsi", "kakaretso"],
       quoteNumber: "Nomoro ya Rekoto",
@@ -259,6 +326,7 @@ export const translations = {
       delete: "Hlakola",
       markAs: "Maka e le",
       companyDetails: "Dintlha tsa Khamphani",
+      pickFromPriceList: "Khetha Lethathamong",
     },
 
     company: {
@@ -330,6 +398,71 @@ export const translations = {
       delete: "Hlakola",
     },
 
+    materials: {
+      title: "Lethathamo la Litheko tsa Thepa",
+      addMaterial: "Kenya Thepa",
+      editMaterial: "Fetola Thepa",
+      materialName: "Lebitso la Thepa",
+      selectCategory: "Khetha Sehlopha",
+      pricePerUnit: "Theko ka Yuniti",
+      unit: "Yuniti (mohlala: beke, methara, letlapa)",
+      category: "Sehlopha",
+      categories: {
+        building: "Kaho",
+        aggregates: "Majoe a Kopantsoeng",
+        roofing: "Marulelo",
+        timber: "Mapolanka",
+        finishing: "Ho Qetela",
+        fittings: "Lisebelisoa",
+        other: "Tse Ding",
+      },
+      confirmDelete: "Hlakola thepa ena?",
+    },
+
+    labour: {
+      calculator: "Sebali sa Moputso oa Basebetsi",
+      worker: "Mosebetsi",
+      selectRole: "Khetha Karolo",
+      roles: {
+        general: "Mosebetsi oa Kakaretso",
+        skilled: "Mosebetsi ea nang le Tsebo",
+        foreman: "Foreman",
+        electrician: "Ramatlakase",
+        plumber: "Raliphaephe",
+      },
+      dailyRate: "Moputso ka Letsatsi (M)",
+      numberOfDays: "Palo ea Matsatsi",
+      addWorker: "Kenya Mosebetsi",
+      totalCost: "Kakaretso ea Moputso",
+      labour: "Mosebetsi",
+      days: "matsatsi",
+      addToQuote: "Kenya Khotheiting",
+      addedToQuote: "Litšenyehelo tsa basebetsi li kentsoe khotheiting!",
+    },
+
+    projects: {
+      title: "Merero",
+      notStarted: "Ha e Qaluoa",
+      inProgress: "E Tsoela Pele",
+      completed: "E Phethiloe",
+      createProject: "Etsa Morero",
+      viewProject: "Sheba Morero",
+      financialSummary: "Kakaretso ea Lichelete",
+      quotedAmount: "Chelete e Qotsitsoeng",
+      totalExpenses: "Litšenyehelo Tsohle",
+      profitLoss: "Phaello / Tahlehelo",
+      profitMargin: "Phaello",
+      expenses: "Litšenyehelo",
+      addExpense: "Kenya Litšenyehelo",
+      description: "Tlhaloso",
+      amount: "Chelete",
+      category: "Sehlopha",
+      date: "Letsatsi",
+      noExpenses: "Ha ho na litšenyehelo tse ngotsoeng",
+      noProjects: "Ha ho na merero",
+      acceptQuoteToCreate: "Amohela khotheite ho etsa morero",
+    },
+
     common: {
       save: "Boloka",
       cancel: "Hlohola",
@@ -346,6 +479,7 @@ export const translations = {
       no: "Tjhe",
       language: "Puo",
       settings: "Maemo",
-    }
-  }
+      tools: "Lisebelisoa",
+    },
+  },
 };

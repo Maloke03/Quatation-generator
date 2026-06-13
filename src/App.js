@@ -11,6 +11,10 @@ import InvoiceView from './pages/InvoiceView';
 import InvoicePrint from './pages/InvoicePrint';
 import Settings from './pages/Settings';
 import BottomNav from './components/BottomNav';
+import MaterialsDB from './pages/MaterialsDB';
+import LabourCalculator from './pages/LabourCalculator';
+import Projects from './pages/Projects';
+import ProjectView from './pages/ProjectView';
 
 const MAIN_TABS = ['dashboard', 'clients', 'quotes', 'invoices', 'settings'];
 
@@ -38,6 +42,10 @@ export default function App() {
       case 'invoices':     return <Invoices navigate={navigate} />;
       case 'invoice-view': return <InvoiceView navigate={navigate} params={params} />;
       case 'invoice-print':return <InvoicePrint navigate={navigate} params={params} />;
+      case 'materials':    return <MaterialsDB navigate={navigate} />;
+      case 'labour':       return <LabourCalculator navigate={navigate} />;
+      case 'projects':      return <Projects navigate={navigate} />;
+      case 'project-view':  return <ProjectView navigate={navigate} params={params} />;
       case 'settings':     return <Settings navigate={navigate} />;
       default:             return <Dashboard navigate={navigate} />;
     }

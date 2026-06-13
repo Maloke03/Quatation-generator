@@ -1,73 +1,294 @@
 // IndexedDB wrapper using native browser API (no external dependency)
 
 const DB_NAME = 'quotepro_db';
-const DB_VERSION = 2;
+const DB_VERSION = 4;
 
 let _db = null;
+let _dbInitPromise = null;
+let _isUpgrading = false;
 
-function openDB() {
-  if (_db) return Promise.resolve(_db);
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => { _db = req.result; resolve(_db); };
-    req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains('clients')) {
-        const cs = db.createObjectStore('clients', { keyPath: 'id' });
-        cs.createIndex('name', 'name');
-      }
-      if (!db.objectStoreNames.contains('quotes')) {
-        const qs = db.createObjectStore('quotes', { keyPath: 'id' });
-        qs.createIndex('clientId', 'clientId');
-        qs.createIndex('createdAt', 'createdAt');
-      }
-      if (!db.objectStoreNames.contains('settings')) {
-        db.createObjectStore('settings');
-      }
-      // V2: Invoices
-      if (!db.objectStoreNames.contains('invoices')) {
-        const inv = db.createObjectStore('invoices', { keyPath: 'id' });
-        inv.createIndex('quoteId', 'quoteId');
-        inv.createIndex('clientId', 'clientId');
-        inv.createIndex('status', 'status');
-        inv.createIndex('createdAt', 'createdAt');
-      }
-      // V2: Payments (linked to an invoice)
-      if (!db.objectStoreNames.contains('payments')) {
-        const pay = db.createObjectStore('payments', { keyPath: 'id' });
-        pay.createIndex('invoiceId', 'invoiceId');
-      }
-    };
-  });
-}
-
-function tx(storeName, mode, fn) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, mode);
-    const store = transaction.objectStore(storeName);
-    const req = fn(store);
-    if (req && req.onsuccess !== undefined) {
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    } else {
-      transaction.oncomplete = () => resolve(req ? req.result : undefined);
-      transaction.onerror = () => reject(transaction.error);
-    }
-  }));
-}
-
-function getAll(storeName) {
-  return openDB().then(db => new Promise((resolve, reject) => {
-    const t = db.transaction(storeName, 'readonly');
-    const req = t.objectStore(storeName).getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  }));
-}
+// Default materials for V3 (Lesotho construction)
+const DEFAULT_MATERIALS = [
+  { name: 'Cement (50kg)', category: 'Building', pricePerUnit: 120, unit: 'bag' },
+  { name: 'Brick (common)', category: 'Building', pricePerUnit: 3.50, unit: 'each' },
+  { name: 'Sand (river)', category: 'Aggregates', pricePerUnit: 350, unit: 'cubic meter' },
+  { name: 'Stone (19mm)', category: 'Aggregates', pricePerUnit: 400, unit: 'cubic meter' },
+  { name: 'Roofing Sheet (iron)', category: 'Roofing', pricePerUnit: 85, unit: 'sheet' },
+  { name: 'Timber (pine 3x2)', category: 'Timber', pricePerUnit: 28, unit: 'meter' },
+  { name: 'Paint (20L)', category: 'Finishing', pricePerUnit: 850, unit: 'bucket' },
+  { name: 'Window (aluminium)', category: 'Fittings', pricePerUnit: 1200, unit: 'each' },
+  { name: 'Door (timber)', category: 'Fittings', pricePerUnit: 1800, unit: 'each' },
+  { name: 'Nails (kg)', category: 'Hardware', pricePerUnit: 25, unit: 'kg' },
+  { name: 'Rebar (12mm)', category: 'Steel', pricePerUnit: 95, unit: 'length' },
+  { name: 'Plumbing Pipe (4m)', category: 'Plumbing', pricePerUnit: 180, unit: 'piece' }
+];
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+// Initialize database - singleton pattern with safe version handling
+function initDB() {
+  if (_db) return Promise.resolve(_db);
+  if (_dbInitPromise) return _dbInitPromise;
+  
+  _dbInitPromise = new Promise((resolve, reject) => {
+    // First, check what version exists
+    const checkRequest = indexedDB.open(DB_NAME);
+    let existingVersion = 0;
+    
+    checkRequest.onupgradeneeded = (event) => {
+      existingVersion = event.oldVersion;
+      checkRequest.transaction.abort();
+    };
+    
+    checkRequest.onsuccess = () => {
+      existingVersion = checkRequest.result.version;
+      checkRequest.result.close();
+      
+      // Determine which version to use (never downgrade)
+      const targetVersion = Math.max(DB_VERSION, existingVersion);
+      
+      const request = indexedDB.open(DB_NAME, targetVersion);
+      
+      request.onerror = (event) => {
+        console.error('Database error:', event.target.error);
+        _dbInitPromise = null;
+        reject(event.target.error);
+      };
+      
+      request.onsuccess = (event) => {
+        _db = event.target.result;
+        _dbInitPromise = null;
+        
+        // Handle connection close
+        _db.onversionchange = () => {
+          if (_db) {
+            _db.close();
+            _db = null;
+          }
+        };
+        
+        resolve(_db);
+      };
+      
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        const oldVersion = event.oldVersion;
+        
+        console.log(`Upgrading database from version ${oldVersion} to ${targetVersion}`);
+        
+        // Create stores only if upgrading
+        if (oldVersion < 1) {
+          // Version 1 stores
+          if (!db.objectStoreNames.contains('clients')) {
+            const cs = db.createObjectStore('clients', { keyPath: 'id' });
+            cs.createIndex('name', 'name');
+            cs.createIndex('createdAt', 'createdAt');
+          }
+          
+          if (!db.objectStoreNames.contains('quotes')) {
+            const qs = db.createObjectStore('quotes', { keyPath: 'id' });
+            qs.createIndex('clientId', 'clientId');
+            qs.createIndex('status', 'status');
+            qs.createIndex('createdAt', 'createdAt');
+          }
+          
+          if (!db.objectStoreNames.contains('settings')) {
+            db.createObjectStore('settings');
+          }
+        }
+        
+        if (oldVersion < 2) {
+          // Version 2 stores (Invoices & Payments)
+          if (!db.objectStoreNames.contains('invoices')) {
+            const inv = db.createObjectStore('invoices', { keyPath: 'id' });
+            inv.createIndex('quoteId', 'quoteId');
+            inv.createIndex('clientId', 'clientId');
+            inv.createIndex('status', 'status');
+            inv.createIndex('createdAt', 'createdAt');
+          }
+          
+          if (!db.objectStoreNames.contains('payments')) {
+            const pay = db.createObjectStore('payments', { keyPath: 'id' });
+            pay.createIndex('invoiceId', 'invoiceId');
+            pay.createIndex('date', 'date');
+          }
+        }
+        
+        if (oldVersion < 3) {
+          // Version 3 stores (Materials)
+          if (!db.objectStoreNames.contains('materials')) {
+            const mat = db.createObjectStore('materials', { keyPath: 'id' });
+            mat.createIndex('name', 'name');
+            mat.createIndex('category', 'category');
+            mat.createIndex('pricePerUnit', 'pricePerUnit');
+            
+            // Add default materials only if this is a new database (oldVersion === 0)
+            if (oldVersion === 0) {
+              const transaction = event.target.transaction;
+              const materialStore = transaction.objectStore('materials');
+              DEFAULT_MATERIALS.forEach(material => {
+                materialStore.add({ ...material, id: generateId(), createdAt: new Date().toISOString() });
+              });
+            }
+          }
+        }
+        
+        if (oldVersion < 4) {
+          // Version 4 stores (Projects & Expenses)
+          if (!db.objectStoreNames.contains('projects')) {
+            const proj = db.createObjectStore('projects', { keyPath: 'id' });
+            proj.createIndex('quoteId', 'quoteId', { unique: true });
+            proj.createIndex('clientId', 'clientId');
+            proj.createIndex('status', 'status');
+            proj.createIndex('createdAt', 'createdAt');
+            proj.createIndex('startDate', 'startDate');
+          }
+          
+          if (!db.objectStoreNames.contains('expenses')) {
+            const exp = db.createObjectStore('expenses', { keyPath: 'id' });
+            exp.createIndex('projectId', 'projectId');
+            exp.createIndex('category', 'category');
+            exp.createIndex('date', 'date');
+            exp.createIndex('createdAt', 'createdAt');
+          }
+        }
+      };
+    };
+    
+    checkRequest.onerror = () => {
+      // If we can't check, just try to open with current version
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      
+      request.onerror = (event) => {
+        _dbInitPromise = null;
+        reject(event.target.error);
+      };
+      
+      request.onsuccess = (event) => {
+        _db = event.target.result;
+        _dbInitPromise = null;
+        resolve(_db);
+      };
+      
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        
+        if (!db.objectStoreNames.contains('clients')) {
+          const cs = db.createObjectStore('clients', { keyPath: 'id' });
+          cs.createIndex('name', 'name');
+          cs.createIndex('createdAt', 'createdAt');
+        }
+        
+        if (!db.objectStoreNames.contains('quotes')) {
+          const qs = db.createObjectStore('quotes', { keyPath: 'id' });
+          qs.createIndex('clientId', 'clientId');
+          qs.createIndex('status', 'status');
+          qs.createIndex('createdAt', 'createdAt');
+        }
+        
+        if (!db.objectStoreNames.contains('settings')) {
+          db.createObjectStore('settings');
+        }
+        
+        if (!db.objectStoreNames.contains('invoices')) {
+          const inv = db.createObjectStore('invoices', { keyPath: 'id' });
+          inv.createIndex('quoteId', 'quoteId');
+          inv.createIndex('clientId', 'clientId');
+          inv.createIndex('status', 'status');
+          inv.createIndex('createdAt', 'createdAt');
+        }
+        
+        if (!db.objectStoreNames.contains('payments')) {
+          const pay = db.createObjectStore('payments', { keyPath: 'id' });
+          pay.createIndex('invoiceId', 'invoiceId');
+          pay.createIndex('date', 'date');
+        }
+        
+        if (!db.objectStoreNames.contains('materials')) {
+          const mat = db.createObjectStore('materials', { keyPath: 'id' });
+          mat.createIndex('name', 'name');
+          mat.createIndex('category', 'category');
+          mat.createIndex('pricePerUnit', 'pricePerUnit');
+        }
+        
+        if (!db.objectStoreNames.contains('projects')) {
+          const proj = db.createObjectStore('projects', { keyPath: 'id' });
+          proj.createIndex('quoteId', 'quoteId', { unique: true });
+          proj.createIndex('clientId', 'clientId');
+          proj.createIndex('status', 'status');
+          proj.createIndex('createdAt', 'createdAt');
+          proj.createIndex('startDate', 'startDate');
+        }
+        
+        if (!db.objectStoreNames.contains('expenses')) {
+          const exp = db.createObjectStore('expenses', { keyPath: 'id' });
+          exp.createIndex('projectId', 'projectId');
+          exp.createIndex('category', 'category');
+          exp.createIndex('date', 'date');
+          exp.createIndex('createdAt', 'createdAt');
+        }
+      };
+    };
+  });
+  
+  return _dbInitPromise;
+}
+
+// Wait for database to be ready
+async function getDB() {
+  return await initDB();
+}
+
+// Cache for frequent access
+const _cache = new Map();
+const CACHE_TTL = 5000;
+
+async function getAll(storeName, skipCache = false) {
+  if (!skipCache && _cache.has(storeName)) {
+    const { data, timestamp } = _cache.get(storeName);
+    if (Date.now() - timestamp < CACHE_TTL) {
+      return data;
+    }
+    _cache.delete(storeName);
+  }
+  
+  try {
+    const db = await getDB();
+    
+    if (!db.objectStoreNames.contains(storeName)) {
+      return [];
+    }
+    
+    return new Promise((resolve, reject) => {
+      try {
+        const transaction = db.transaction(storeName, 'readonly');
+        const store = transaction.objectStore(storeName);
+        const request = store.getAll();
+        
+        request.onsuccess = () => {
+          _cache.set(storeName, { data: request.result, timestamp: Date.now() });
+          resolve(request.result);
+        };
+        
+        request.onerror = () => reject(request.error);
+      } catch (error) {
+        if (error.name === 'NotFoundError' || error.name === 'InvalidStateError') {
+          resolve([]);
+        } else {
+          reject(error);
+        }
+      }
+    });
+  } catch (error) {
+    console.error(`Error getting ${storeName}:`, error);
+    return [];
+  }
+}
+
+function clearCache(storeName) {
+  _cache.delete(storeName);
 }
 
 // ─── CLIENTS ───────────────────────────────────────────────────────────────
@@ -77,34 +298,67 @@ export async function getAllClients() {
 }
 
 export async function getClient(id) {
-  return tx('clients', 'readonly', store => store.get(id));
+  if (!id) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('clients', 'readonly');
+    const store = transaction.objectStore('clients');
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
 }
 
 export async function saveClient(client) {
+  if (!client || !client.name) throw new Error('Client name is required');
+  
   const now = new Date().toISOString();
-  const db = await openDB();
+  const db = await getDB();
+  
   return new Promise((resolve, reject) => {
-    const t = db.transaction('clients', 'readwrite');
-    const store = t.objectStore('clients');
+    const transaction = db.transaction('clients', 'readwrite');
+    const store = transaction.objectStore('clients');
+    
     if (client.id) {
-      const getReq = store.get(client.id);
-      getReq.onsuccess = () => {
-        const updated = { ...getReq.result, ...client, updatedAt: now };
-        const putReq = store.put(updated);
-        putReq.onsuccess = () => resolve(updated);
-        putReq.onerror = () => reject(putReq.error);
+      const getRequest = store.get(client.id);
+      getRequest.onsuccess = () => {
+        if (!getRequest.result) {
+          reject(new Error('Client not found'));
+          return;
+        }
+        const updated = { ...getRequest.result, ...client, updatedAt: now };
+        const putRequest = store.put(updated);
+        putRequest.onsuccess = () => {
+          clearCache('clients');
+          resolve(updated);
+        };
+        putRequest.onerror = () => reject(putRequest.error);
       };
+      getRequest.onerror = () => reject(getRequest.error);
     } else {
       const newClient = { ...client, id: generateId(), createdAt: now, updatedAt: now };
-      const putReq = store.put(newClient);
-      putReq.onsuccess = () => resolve(newClient);
-      putReq.onerror = () => reject(putReq.error);
+      const putRequest = store.put(newClient);
+      putRequest.onsuccess = () => {
+        clearCache('clients');
+        resolve(newClient);
+      };
+      putRequest.onerror = () => reject(putRequest.error);
     }
+    
+    transaction.onerror = () => reject(transaction.error);
   });
 }
 
 export async function deleteClient(id) {
-  return tx('clients', 'readwrite', store => store.delete(id));
+  clearCache('clients');
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('clients', 'readwrite');
+    const store = transaction.objectStore('clients');
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
 }
 
 // ─── QUOTES ────────────────────────────────────────────────────────────────
@@ -114,57 +368,127 @@ export async function getAllQuotes() {
   return quotes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
+export async function getQuotesByClient(clientId) {
+  const quotes = await getAll('quotes');
+  return quotes.filter(q => q.clientId === clientId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
 export async function getQuote(id) {
-  return tx('quotes', 'readonly', store => store.get(id));
+  if (!id) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('quotes', 'readonly');
+    const store = transaction.objectStore('quotes');
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
 }
 
 export async function saveQuote(quote) {
+  if (!quote || !quote.clientId) throw new Error('Client ID is required');
+  
+  // Check items (not lineItems) for validation
+  const hasItems = quote.items?.some(i => i.name?.trim() && parseFloat(i.qty) > 0);
+  if (!hasItems) throw new Error('Quote must have at least one line item');
+  
   const now = new Date().toISOString();
-  const db = await openDB();
+  const db = await getDB();
+  
   return new Promise((resolve, reject) => {
-    const t = db.transaction('quotes', 'readwrite');
-    const store = t.objectStore('quotes');
+    const transaction = db.transaction('quotes', 'readwrite');
+    const store = transaction.objectStore('quotes');
+    
     if (quote.id) {
-      const getReq = store.get(quote.id);
-      getReq.onsuccess = () => {
-        const updated = { ...getReq.result, ...quote, updatedAt: now };
-        const putReq = store.put(updated);
-        putReq.onsuccess = () => resolve(updated);
-        putReq.onerror = () => reject(putReq.error);
+      const getRequest = store.get(quote.id);
+      getRequest.onsuccess = () => {
+        if (!getRequest.result) {
+          reject(new Error('Quote not found'));
+          return;
+        }
+        const updated = { ...getRequest.result, ...quote, updatedAt: now };
+        const putRequest = store.put(updated);
+        putRequest.onsuccess = () => {
+          clearCache('quotes');
+          resolve(updated);
+        };
+        putRequest.onerror = () => reject(putRequest.error);
       };
+      getRequest.onerror = () => reject(getRequest.error);
     } else {
-      // Generate quote number — need count first
-      const allReq = store.getAll();
-      allReq.onsuccess = () => {
-        const all = allReq.result;
+      const allRequest = store.getAll();
+      allRequest.onsuccess = () => {
+        const all = allRequest.result || [];
         const year = new Date().getFullYear();
         const count = all.filter(q => q.quoteNumber?.startsWith(`QP-${year}`)).length + 1;
         const quoteNumber = `QP-${year}-${String(count).padStart(3, '0')}`;
-        const newQuote = { ...quote, id: generateId(), quoteNumber, status: quote.status || 'draft', createdAt: now, updatedAt: now };
-        const putReq = store.put(newQuote);
-        putReq.onsuccess = () => resolve(newQuote);
-        putReq.onerror = () => reject(putReq.error);
+        
+        // Calculate totals from items
+        const subtotal = (quote.items || []).reduce((sum, item) => {
+          return sum + ((parseFloat(item.qty) || 0) * (parseFloat(item.unitPrice) || 0));
+        }, 0);
+        const vatAmount = quote.includeVat ? subtotal * 0.14 : 0;
+        const grandTotal = subtotal + vatAmount;
+        
+        const newQuote = { 
+          ...quote, 
+          id: generateId(), 
+          quoteNumber,
+          subtotal: subtotal,
+          vatAmount: vatAmount,
+          grandTotal: grandTotal,
+          status: quote.status || 'draft', 
+          createdAt: now, 
+          updatedAt: now 
+        };
+        const putRequest = store.put(newQuote);
+        putRequest.onsuccess = () => {
+          clearCache('quotes');
+          resolve(newQuote);
+        };
+        putRequest.onerror = () => reject(putRequest.error);
       };
+      allRequest.onerror = () => reject(allRequest.error);
     }
+    
+    transaction.onerror = () => reject(transaction.error);
   });
 }
 
 export async function deleteQuote(id) {
-  return tx('quotes', 'readwrite', store => store.delete(id));
+  clearCache('quotes');
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('quotes', 'readwrite');
+    const store = transaction.objectStore('quotes');
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
 }
 
 export async function updateQuoteStatus(id, status) {
-  const db = await openDB();
+  if (!id || !status) throw new Error('Quote ID and status are required');
+  
+  const db = await getDB();
   return new Promise((resolve, reject) => {
-    const t = db.transaction('quotes', 'readwrite');
-    const store = t.objectStore('quotes');
-    const getReq = store.get(id);
-    getReq.onsuccess = () => {
-      const quote = { ...getReq.result, status, updatedAt: new Date().toISOString() };
-      const putReq = store.put(quote);
-      putReq.onsuccess = () => resolve(quote);
-      putReq.onerror = () => reject(putReq.error);
+    const transaction = db.transaction('quotes', 'readwrite');
+    const store = transaction.objectStore('quotes');
+    const getRequest = store.get(id);
+    getRequest.onsuccess = () => {
+      if (!getRequest.result) {
+        reject(new Error('Quote not found'));
+        return;
+      }
+      const quote = { ...getRequest.result, status, updatedAt: new Date().toISOString() };
+      const putRequest = store.put(quote);
+      putRequest.onsuccess = () => {
+        clearCache('quotes');
+        resolve(quote);
+      };
+      putRequest.onerror = () => reject(putRequest.error);
     };
+    getRequest.onerror = () => reject(getRequest.error);
   });
 }
 
@@ -175,39 +499,67 @@ export async function getAllInvoices() {
   return invoices.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
+export async function getInvoicesByClient(clientId) {
+  const invoices = await getAll('invoices');
+  return invoices.filter(i => i.clientId === clientId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
 export async function getInvoice(id) {
-  return tx('invoices', 'readonly', store => store.get(id));
+  if (!id) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('invoices', 'readonly');
+    const store = transaction.objectStore('invoices');
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
 }
 
 export async function getInvoiceByQuote(quoteId) {
-  const db = await openDB();
+  if (!quoteId) return null;
+  const db = await getDB();
   return new Promise((resolve, reject) => {
-    const t = db.transaction('invoices', 'readonly');
-    const req = t.objectStore('invoices').index('quoteId').get(quoteId);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
+    const transaction = db.transaction('invoices', 'readonly');
+    const store = transaction.objectStore('invoices');
+    const index = store.index('quoteId');
+    const request = index.get(quoteId);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
   });
 }
 
 export async function saveInvoice(invoice) {
+  if (!invoice || !invoice.quoteId) throw new Error('Quote ID is required');
+  if (!invoice.grandTotal && invoice.grandTotal !== 0) throw new Error('Invoice total is required');
+  
   const now = new Date().toISOString();
-  const db = await openDB();
+  const db = await getDB();
+  
   return new Promise((resolve, reject) => {
-    const t = db.transaction('invoices', 'readwrite');
-    const store = t.objectStore('invoices');
+    const transaction = db.transaction('invoices', 'readwrite');
+    const store = transaction.objectStore('invoices');
+    
     if (invoice.id) {
-      const getReq = store.get(invoice.id);
-      getReq.onsuccess = () => {
-        const updated = { ...getReq.result, ...invoice, updatedAt: now };
-        const putReq = store.put(updated);
-        putReq.onsuccess = () => resolve(updated);
-        putReq.onerror = () => reject(putReq.error);
+      const getRequest = store.get(invoice.id);
+      getRequest.onsuccess = () => {
+        if (!getRequest.result) {
+          reject(new Error('Invoice not found'));
+          return;
+        }
+        const updated = { ...getRequest.result, ...invoice, updatedAt: now };
+        const putRequest = store.put(updated);
+        putRequest.onsuccess = () => {
+          clearCache('invoices');
+          resolve(updated);
+        };
+        putRequest.onerror = () => reject(putRequest.error);
       };
-      getReq.onerror = () => reject(getReq.error);
+      getRequest.onerror = () => reject(getRequest.error);
     } else {
-      const allReq = store.getAll();
-      allReq.onsuccess = () => {
-        const all = allReq.result;
+      const allRequest = store.getAll();
+      allRequest.onsuccess = () => {
+        const all = allRequest.result;
         const year = new Date().getFullYear();
         const count = all.filter(i => i.invoiceNumber?.startsWith(`INV-${year}`)).length + 1;
         const invoiceNumber = `INV-${year}-${String(count).padStart(3, '0')}`;
@@ -220,105 +572,523 @@ export async function saveInvoice(invoice) {
           createdAt: now,
           updatedAt: now,
         };
-        const putReq = store.put(newInvoice);
-        putReq.onsuccess = () => resolve(newInvoice);
-        putReq.onerror = () => reject(putReq.error);
+        const putRequest = store.put(newInvoice);
+        putRequest.onsuccess = () => {
+          clearCache('invoices');
+          resolve(newInvoice);
+        };
+        putRequest.onerror = () => reject(putRequest.error);
       };
-      allReq.onerror = () => reject(allReq.error);
+      allRequest.onerror = () => reject(allRequest.error);
     }
+    
+    transaction.onerror = () => reject(transaction.error);
   });
 }
 
 export async function deleteInvoice(id) {
-  return tx('invoices', 'readwrite', store => store.delete(id));
+  clearCache('invoices');
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('invoices', 'readwrite');
+    const store = transaction.objectStore('invoices');
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
 }
 
 // ─── PAYMENTS ──────────────────────────────────────────────────────────────
 
 export async function getPaymentsByInvoice(invoiceId) {
-  const db = await openDB();
+  if (!invoiceId) return [];
+  const db = await getDB();
   return new Promise((resolve, reject) => {
-    const t = db.transaction('payments', 'readonly');
-    const req = t.objectStore('payments').index('invoiceId').getAll(invoiceId);
-    req.onsuccess = () => resolve(req.result.sort((a, b) => new Date(b.date) - new Date(a.date)));
-    req.onerror = () => reject(req.error);
+    const transaction = db.transaction('payments', 'readonly');
+    const store = transaction.objectStore('payments');
+    const index = store.index('invoiceId');
+    const request = index.getAll(invoiceId);
+    request.onsuccess = () => resolve(request.result.sort((a, b) => new Date(b.date) - new Date(a.date)));
+    request.onerror = () => reject(request.error);
   });
 }
 
 export async function addPayment(invoiceId, payment) {
+  if (!invoiceId) throw new Error('Invoice ID is required');
+  if (!payment.amount || payment.amount <= 0) throw new Error('Valid payment amount is required');
+  
   const now = new Date().toISOString();
-  const db = await openDB();
+  const db = await getDB();
+  
   return new Promise((resolve, reject) => {
-    const t = db.transaction(['payments', 'invoices'], 'readwrite');
-    const payStore = t.objectStore('payments');
-    const invStore = t.objectStore('invoices');
+    const transaction = db.transaction(['payments', 'invoices'], 'readwrite');
+    const payStore = transaction.objectStore('payments');
+    const invStore = transaction.objectStore('invoices');
 
-    const newPayment = { ...payment, id: generateId(), invoiceId, createdAt: now };
+    const newPayment = { 
+      ...payment, 
+      id: generateId(), 
+      invoiceId, 
+      date: payment.date || now,
+      createdAt: now 
+    };
     payStore.put(newPayment);
 
-    // Update invoice amountPaid + status
     const getInv = invStore.get(invoiceId);
     getInv.onsuccess = () => {
+      if (!getInv.result) {
+        reject(new Error('Invoice not found'));
+        return;
+      }
+      
       const inv = getInv.result;
-      // Sum all existing payments + new
-      const payReq = t.objectStore('payments').index('invoiceId').getAll(invoiceId);
+      const payIndex = transaction.objectStore('payments').index('invoiceId');
+      const payReq = payIndex.getAll(invoiceId);
       payReq.onsuccess = () => {
         const existingTotal = payReq.result.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
         const amountPaid = existingTotal + (parseFloat(payment.amount) || 0);
         const grandTotal = inv.grandTotal || 0;
+        
         let status = 'unpaid';
         if (amountPaid >= grandTotal) status = 'paid';
         else if (amountPaid > 0) status = 'partial';
+        
         invStore.put({ ...inv, amountPaid, status, updatedAt: now });
+        clearCache('invoices');
+        clearCache('payments');
       };
+      payReq.onerror = () => reject(payReq.error);
     };
+    getInv.onerror = () => reject(getInv.error);
 
-    t.oncomplete = () => resolve(newPayment);
-    t.onerror = () => reject(t.error);
+    transaction.oncomplete = () => resolve(newPayment);
+    transaction.onerror = () => reject(transaction.error);
   });
 }
 
 export async function deletePayment(paymentId, invoiceId) {
+  if (!paymentId || !invoiceId) throw new Error('Payment ID and Invoice ID are required');
+  
   const now = new Date().toISOString();
-  const db = await openDB();
+  const db = await getDB();
+  
   return new Promise((resolve, reject) => {
-    const t = db.transaction(['payments', 'invoices'], 'readwrite');
-    t.objectStore('payments').delete(paymentId);
+    const transaction = db.transaction(['payments', 'invoices'], 'readwrite');
+    transaction.objectStore('payments').delete(paymentId);
 
-    const invStore = t.objectStore('invoices');
+    const invStore = transaction.objectStore('invoices');
     const getInv = invStore.get(invoiceId);
     getInv.onsuccess = () => {
+      if (!getInv.result) {
+        reject(new Error('Invoice not found'));
+        return;
+      }
+      
       const inv = getInv.result;
-      const payReq = t.objectStore('payments').index('invoiceId').getAll(invoiceId);
+      const payIndex = transaction.objectStore('payments').index('invoiceId');
+      const payReq = payIndex.getAll(invoiceId);
       payReq.onsuccess = () => {
         const amountPaid = payReq.result
           .filter(p => p.id !== paymentId)
           .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
         const grandTotal = inv.grandTotal || 0;
+        
         let status = 'unpaid';
         if (amountPaid >= grandTotal) status = 'paid';
         else if (amountPaid > 0) status = 'partial';
+        
         invStore.put({ ...inv, amountPaid, status, updatedAt: now });
+        clearCache('invoices');
+        clearCache('payments');
       };
+      payReq.onerror = () => reject(payReq.error);
     };
+    getInv.onerror = () => reject(getInv.error);
 
-    t.oncomplete = () => resolve();
-    t.onerror = () => reject(t.error);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
   });
+}
+
+// ─── MATERIALS (V3) ─────────────────────────────────────────────────────────
+
+export async function getAllMaterials() {
+  return getAll('materials');
+}
+
+export async function getMaterialsByCategory(category) {
+  if (!category) return [];
+  const materials = await getAll('materials');
+  return materials.filter(m => m.category === category);
+}
+
+export async function getMaterial(id) {
+  if (!id) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('materials', 'readonly');
+    const store = transaction.objectStore('materials');
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function saveMaterial(material) {
+  if (!material || !material.name) throw new Error('Material name is required');
+  if (!material.pricePerUnit || material.pricePerUnit <= 0) throw new Error('Valid price is required');
+  
+  const now = new Date().toISOString();
+  const db = await getDB();
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('materials', 'readwrite');
+    const store = transaction.objectStore('materials');
+    
+    if (material.id) {
+      const getRequest = store.get(material.id);
+      getRequest.onsuccess = () => {
+        if (!getRequest.result) {
+          reject(new Error('Material not found'));
+          return;
+        }
+        const updated = { ...getRequest.result, ...material, updatedAt: now };
+        const putRequest = store.put(updated);
+        putRequest.onsuccess = () => {
+          clearCache('materials');
+          resolve(updated);
+        };
+        putRequest.onerror = () => reject(putRequest.error);
+      };
+      getRequest.onerror = () => reject(getRequest.error);
+    } else {
+      const newMaterial = { 
+        ...material, 
+        id: generateId(), 
+        createdAt: now, 
+        updatedAt: now 
+      };
+      const putRequest = store.put(newMaterial);
+      putRequest.onsuccess = () => {
+        clearCache('materials');
+        resolve(newMaterial);
+      };
+      putRequest.onerror = () => reject(putRequest.error);
+    }
+    
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+export async function deleteMaterial(id) {
+  clearCache('materials');
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('materials', 'readwrite');
+    const store = transaction.objectStore('materials');
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function searchMaterials(query) {
+  if (!query) return getAllMaterials();
+  
+  const materials = await getAll('materials');
+  const lowerQuery = query.toLowerCase();
+  return materials.filter(m => 
+    m.name.toLowerCase().includes(lowerQuery) || 
+    m.category.toLowerCase().includes(lowerQuery)
+  );
 }
 
 // ─── SETTINGS ──────────────────────────────────────────────────────────────
 
 export async function getSetting(key) {
-  return tx('settings', 'readonly', store => store.get(key));
+  if (!key) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('settings', 'readonly');
+    const store = transaction.objectStore('settings');
+    const request = store.get(key);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
 }
 
 export async function setSetting(key, value) {
-  const db = await openDB();
+  if (!key) throw new Error('Setting key is required');
+  
+  const db = await getDB();
   return new Promise((resolve, reject) => {
-    const t = db.transaction('settings', 'readwrite');
-    const req = t.objectStore('settings').put(value, key);
-    req.onsuccess = () => resolve(value);
-    req.onerror = () => reject(req.error);
+    const transaction = db.transaction('settings', 'readwrite');
+    const store = transaction.objectStore('settings');
+    const request = store.put(value, key);
+    request.onsuccess = () => {
+      clearCache('settings');
+      resolve(value);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// ─── PROJECTS (V4) ─────────────────────────────────────────────────────────
+
+export async function getAllProjects() {
+  const projects = await getAll('projects');
+  return projects.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+export async function getProjectsByClient(clientId) {
+  const projects = await getAll('projects');
+  return projects.filter(p => p.clientId === clientId);
+}
+
+export async function getProjectsByStatus(status) {
+  const projects = await getAll('projects');
+  return projects.filter(p => p.status === status);
+}
+
+export async function getProject(id) {
+  if (!id) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('projects', 'readonly');
+    const store = transaction.objectStore('projects');
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function getProjectByQuote(quoteId) {
+  if (!quoteId) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('projects', 'readonly');
+    const store = transaction.objectStore('projects');
+    const index = store.index('quoteId');
+    const request = index.get(quoteId);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function saveProject(project) {
+  if (!project || !project.quoteId) throw new Error('Quote ID is required');
+  if (!project.clientId) throw new Error('Client ID is required');
+  
+  const now = new Date().toISOString();
+  const db = await getDB();
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('projects', 'readwrite');
+    const store = transaction.objectStore('projects');
+    
+    if (project.id) {
+      const getRequest = store.get(project.id);
+      getRequest.onsuccess = () => {
+        if (!getRequest.result) {
+          reject(new Error('Project not found'));
+          return;
+        }
+        const updated = { ...getRequest.result, ...project, updatedAt: now };
+        const putRequest = store.put(updated);
+        putRequest.onsuccess = () => {
+          clearCache('projects');
+          resolve(updated);
+        };
+        putRequest.onerror = () => reject(putRequest.error);
+      };
+      getRequest.onerror = () => reject(getRequest.error);
+    } else {
+      const newProject = {
+        ...project,
+        id: generateId(),
+        status: project.status || 'not_started',
+        createdAt: now,
+        updatedAt: now,
+      };
+      const putRequest = store.put(newProject);
+      putRequest.onsuccess = () => {
+        clearCache('projects');
+        resolve(newProject);
+      };
+      putRequest.onerror = () => reject(putRequest.error);
+    }
+    
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+export async function updateProjectStatus(id, status) {
+  if (!id || !status) throw new Error('Project ID and status are required');
+  
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('projects', 'readwrite');
+    const store = transaction.objectStore('projects');
+    const getRequest = store.get(id);
+    getRequest.onsuccess = () => {
+      if (!getRequest.result) {
+        reject(new Error('Project not found'));
+        return;
+      }
+      const project = { ...getRequest.result, status, updatedAt: new Date().toISOString() };
+      const putRequest = store.put(project);
+      putRequest.onsuccess = () => {
+        clearCache('projects');
+        resolve(project);
+      };
+      putRequest.onerror = () => reject(putRequest.error);
+    };
+    getRequest.onerror = () => reject(getRequest.error);
+  });
+}
+
+export async function deleteProject(id) {
+  clearCache('projects');
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('projects', 'readwrite');
+    const store = transaction.objectStore('projects');
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// ─── EXPENSES (V4) ─────────────────────────────────────────────────────────
+
+export async function getExpensesByProject(projectId) {
+  if (!projectId) return [];
+  const expenses = await getAll('expenses');
+  return expenses.filter(e => e.projectId === projectId).sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+export async function getAllExpenses() {
+  const expenses = await getAll('expenses');
+  return expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+export async function getExpense(id) {
+  if (!id) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('expenses', 'readonly');
+    const store = transaction.objectStore('expenses');
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function saveExpense(expense) {
+  if (!expense || !expense.projectId) throw new Error('Project ID is required');
+  if (!expense.amount || expense.amount <= 0) throw new Error('Valid amount is required');
+  
+  const now = new Date().toISOString();
+  const db = await getDB();
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('expenses', 'readwrite');
+    const store = transaction.objectStore('expenses');
+    
+    if (expense.id) {
+      const getRequest = store.get(expense.id);
+      getRequest.onsuccess = () => {
+        if (!getRequest.result) {
+          reject(new Error('Expense not found'));
+          return;
+        }
+        const updated = { ...getRequest.result, ...expense, updatedAt: now };
+        const putRequest = store.put(updated);
+        putRequest.onsuccess = () => {
+          clearCache('expenses');
+          resolve(updated);
+        };
+        putRequest.onerror = () => reject(putRequest.error);
+      };
+      getRequest.onerror = () => reject(getRequest.error);
+    } else {
+      const newExpense = {
+        ...expense,
+        id: generateId(),
+        createdAt: now,
+        updatedAt: now,
+      };
+      const putRequest = store.put(newExpense);
+      putRequest.onsuccess = () => {
+        clearCache('expenses');
+        resolve(newExpense);
+      };
+      putRequest.onerror = () => reject(putRequest.error);
+    }
+    
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+export async function deleteExpense(id) {
+  clearCache('expenses');
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('expenses', 'readwrite');
+    const store = transaction.objectStore('expenses');
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function getTotalExpensesByProject(projectId) {
+  const expenses = await getExpensesByProject(projectId);
+  return expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+}
+
+// ─── UTILITY ────────────────────────────────────────────────────────────────
+
+export async function getAllCompanySettings() {
+  const settings = await getAll('settings');
+  const settingsObj = {};
+  settings.forEach(setting => {
+    if (setting.key) settingsObj[setting.key] = setting.value;
+  });
+  return settingsObj;
+}
+
+export async function clearAllData() {
+  const stores = ['clients', 'quotes', 'invoices', 'payments', 'materials', 'settings', 'projects', 'expenses'];
+  const db = await getDB();
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(stores, 'readwrite');
+    let completed = 0;
+    let hasError = false;
+    
+    stores.forEach(storeName => {
+      if (db.objectStoreNames.contains(storeName)) {
+        const request = transaction.objectStore(storeName).clear();
+        request.onsuccess = () => {
+          completed++;
+          clearCache(storeName);
+          if (completed === stores.length && !hasError) resolve();
+        };
+        request.onerror = () => {
+          if (!hasError) {
+            hasError = true;
+            reject(request.error);
+          }
+        };
+      } else {
+        completed++;
+        if (completed === stores.length && !hasError) resolve();
+      }
+    });
+    
+    transaction.onerror = () => {
+      if (!hasError) reject(transaction.error);
+    };
   });
 }

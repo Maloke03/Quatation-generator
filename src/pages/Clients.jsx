@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
+import { useTranslation } from '../i18n/useTranslation';
 import { getAllClients, saveClient, deleteClient, getAllQuotes } from '../db';
 import { Card, Button, Input, Modal, Confirm, EmptyState, TopBar } from '../components/UI';
 import { Plus, Search, Pencil, Trash2, ChevronRight } from 'lucide-react';

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
+import { useTranslation } from '../i18n/useTranslation';
 import { getInvoice, getClient, getPaymentsByInvoice, addPayment, deletePayment } from '../db';
 import { formatCurrency, formatDate, todayISO } from '../utils/format';
 import { Button, Card, TopBar, Modal, Confirm, Input, Select } from '../components/UI';

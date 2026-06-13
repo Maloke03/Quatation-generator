@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { getAllClients, saveQuote, getQuote } from '../db';
+import { useTranslation } from '../i18n/useTranslation';
+import { getAllClients, saveQuote, getQuote, getAllMaterials } from '../db';
 import { Input, Select, Textarea, Button, TopBar, Card } from '../components/UI';
 import { calcLineTotal, calcSubtotal, calcVAT, calcGrandTotal, formatCurrency, futureDate, todayISO } from '../utils/format';
-import { Plus, Trash2, ChevronLeft, Eye } from 'lucide-react';
+import { Plus, Trash2, ChevronLeft, Eye, Package, Users } from 'lucide-react';
 
 const COMMON_ITEMS = [
   'Cement (50kg bags)', 'Bricks', 'Sand (m³)', 'Stone (m³)',
@@ -88,6 +89,9 @@ export default function QuoteBuilder({ navigate, params = {} }) {
   const isEdit = !!params.quoteId;
 
   const [clients, setClients] = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [showPriceList, setShowPriceList] = useState(false);
+  const [showLabourModal, setShowLabourModal] = useState(false);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
@@ -103,14 +107,44 @@ export default function QuoteBuilder({ navigate, params = {} }) {
     status: 'draft',
   });
 
+  // Load clients and materials on mount
   useEffect(() => {
     getAllClients().then(setClients);
+    loadMaterials();
+    
+    // Check for pending labour items from LabourCalculator
+    const pendingLabour = localStorage.getItem('pendingLabourItems');
+    if (pendingLabour) {
+      const labourItems = JSON.parse(pendingLabour);
+      if (labourItems.length > 0) {
+        const newItems = labourItems.map(item => ({
+          id: Date.now() + Math.random(),
+          name: item.description,
+          qty: item.quantity || 1,
+          unit: 'job',
+          unitPrice: item.total,
+        }));
+        setForm(f => ({ ...f, items: [...newItems, ...f.items] }));
+        localStorage.removeItem('pendingLabourItems');
+      }
+    }
+    
     if (isEdit) {
       getQuote(params.quoteId).then(q => {
         if (q) setForm(q);
       });
     }
   }, []);
+
+  const loadMaterials = async () => {
+    try {
+      const mats = await getAllMaterials();
+      setMaterials(mats || []);
+    } catch (error) {
+      console.error('Failed to load materials:', error);
+      setMaterials([]);
+    }
+  };
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
 
@@ -125,30 +159,89 @@ export default function QuoteBuilder({ navigate, params = {} }) {
     set('items', form.items.filter((_, idx) => idx !== i));
   }
 
+  // Add material from price list
+  function addFromPriceList(material) {
+    const newItem = {
+      id: Date.now(),
+      name: `${material.name} (${material.unit})`,
+      qty: 1,
+      unit: material.unit,
+      unitPrice: material.pricePerUnit,
+    };
+    set('items', [newItem, ...form.items]);
+    setShowPriceList(false);
+  }
+
+  // Add pre-defined labour template
+  function addLabourTemplate(role, dailyRate, days) {
+    const total = dailyRate * days;
+    const newItem = {
+      id: Date.now(),
+      name: `${role} - ${days} day(s) @ ${formatCurrency(dailyRate)}/day`,
+      qty: 1,
+      unit: 'job',
+      unitPrice: total,
+    };
+    set('items', [newItem, ...form.items]);
+  }
+
   const subtotal = calcSubtotal(form.items);
   const vat = form.includeVat ? calcVAT(subtotal) : 0;
   const grandTotal = calcGrandTotal(subtotal, form.includeVat);
 
   function validate() {
-    const e = {};
-    if (!form.clientId) e.clientId = t.quote.noClient;
-    if (!form.projectName.trim()) e.projectName = t.common.required;
-    const hasItems = form.items.some(i => i.name.trim() && parseFloat(i.qty) > 0);
-    if (!hasItems) e.items = t.quote.noItems;
-    return e;
-  }
+  const e = {};
+  if (!form.clientId) e.clientId = t.quote.noClient;
+  if (!form.projectName?.trim()) e.projectName = t.common.required;
+  // Fix: Check items array properly
+  const hasItems = form.items?.some(i => i.name?.trim() && parseFloat(i.qty) > 0);
+  if (!hasItems) e.items = t.quote.noItems;
+  return e;
+}
 
   async function handleSave() {
-    const e = validate();
-    if (Object.keys(e).length) { setErrors(e); return; }
-    setSaving(true);
-    try {
-      const saved = await saveQuote({ ...form, id: isEdit ? params.quoteId : undefined });
-      navigate('quote-view', { quoteId: saved.id });
-    } finally {
-      setSaving(false);
-    }
+  const e = validate();
+  if (Object.keys(e).length) { setErrors(e); return; }
+  setSaving(true);
+  try {
+    // Transform items to match the format expected by QuoteView
+    const quoteData = {
+      clientId: form.clientId,
+      projectName: form.projectName,
+      date: form.date,
+      validUntil: form.validUntil,
+      includeVat: form.includeVat,
+      terms: form.terms,
+      notes: form.notes,
+      items: form.items
+        .filter(item => item.name?.trim() && parseFloat(item.qty) > 0)
+        .map(item => ({
+          name: item.name,
+          qty: parseFloat(item.qty) || 0,
+          unit: item.unit || 'each',
+          unitPrice: parseFloat(item.unitPrice) || 0,
+        })),
+      status: form.status || 'draft'
+    };
+    
+    const saved = await saveQuote(quoteData);
+    navigate('quote-view', { quoteId: saved.id });
+  } catch (error) {
+    console.error('Save error:', error);
+    setErrors({ save: error.message });
+    alert('Error saving quote: ' + error.message);
+  } finally {
+    setSaving(false);
   }
+}
+
+  // Labour templates
+  const labourTemplates = [
+    { role: t.quote.labour?.bricklayer || 'Bricklayer', dailyRate: 250, days: 1 },
+    { role: t.quote.labour?.general || 'General Worker', dailyRate: 150, days: 1 },
+    { role: t.quote.labour?.plumber || 'Plumber', dailyRate: 300, days: 1 },
+    { role: t.quote.labour?.electrician || 'Electrician', dailyRate: 300, days: 1 },
+  ];
 
   return (
     <div className="flex flex-col min-h-full">
@@ -195,12 +288,29 @@ export default function QuoteBuilder({ navigate, params = {} }) {
           <Input label={t.quote.validUntil} type="date" value={form.validUntil} onChange={e => set('validUntil', e.target.value)} />
         </div>
 
-        {/* Line items */}
+        {/* Line items with quick-add buttons */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">{t.quote.items}</label>
             {errors.items && <span className="text-xs text-red-400">{errors.items}</span>}
           </div>
+          
+          {/* Quick-add buttons */}
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setShowPriceList(true)}
+              className="flex-1 bg-[#1e3a2a] border border-green-700 text-white px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-2 hover:bg-[#2a4a35] transition-colors"
+            >
+              <Package size={16} /> 📦 {t.quote.pickFromPriceList || 'Price List'}
+            </button>
+            <button
+              onClick={() => setShowLabourModal(true)}
+              className="flex-1 bg-[#1e3a2a] border border-green-700 text-white px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-2 hover:bg-[#2a4a35] transition-colors"
+            >
+              <Users size={16} /> 👷 {t.quote.addLabour || 'Add Labour'}
+            </button>
+          </div>
+
           <div className="flex flex-col gap-2">
             {form.items.map((item, i) => (
               <LineItem key={item.id || i} item={item} index={i} onChange={updateItem} onRemove={removeItem} t={t} />
@@ -261,6 +371,87 @@ export default function QuoteBuilder({ navigate, params = {} }) {
           {saving ? t.common.loading : t.quote.save}
         </Button>
       </div>
+
+      {/* Price List Modal */}
+      {showPriceList && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-end z-50">
+          <div className="bg-[#0a1810] border-t border-[#1e3a2a] w-full max-h-[80vh] rounded-t-xl overflow-y-auto">
+            <div className="sticky top-0 bg-[#0a1810] p-4 border-b border-[#1e3a2a] flex justify-between items-center">
+              <h3 className="font-bold text-white">{t.quote.materialPriceDB || 'Material Price Database'}</h3>
+              <button onClick={() => setShowPriceList(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
+            </div>
+            <div className="divide-y divide-[#1e3a2a]">
+              {materials.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <Package size={48} className="mx-auto mb-3 opacity-50" />
+                  <p>{t.quote.noMaterials || 'No materials saved yet'}</p>
+                  <p className="text-sm mt-2">{t.quote.goToSettings || 'Go to Settings → Material Price DB to add some'}</p>
+                </div>
+              ) : (
+                materials.map(mat => (
+                  <div key={mat.id} className="p-4 flex justify-between items-center">
+                    <div>
+                      <div className="font-semibold text-white">{mat.name}</div>
+                      <div className="text-sm text-gray-500">{mat.category || 'Material'} • {mat.unit}</div>
+                      <div className="text-green-400 font-medium mt-1">{formatCurrency(mat.pricePerUnit)}</div>
+                    </div>
+                    <button
+                      onClick={() => addFromPriceList(mat)}
+                      className="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                    >
+                      {t.quote.add || 'Add'}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Labour Modal */}
+      {showLabourModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-end z-50">
+          <div className="bg-[#0a1810] border-t border-[#1e3a2a] w-full max-h-[80vh] rounded-t-xl overflow-y-auto">
+            <div className="sticky top-0 bg-[#0a1810] p-4 border-b border-[#1e3a2a] flex justify-between items-center">
+              <h3 className="font-bold text-white">{t.quote.labourCalculator || 'Add Labour Cost'}</h3>
+              <button onClick={() => setShowLabourModal(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
+            </div>
+            <div className="p-4">
+              <p className="text-gray-400 text-sm mb-4 text-center">
+                {t.quote.selectLabourTemplate || 'Select a labour template or go to Labour Calculator for custom'}
+              </p>
+              <div className="space-y-3">
+                {labourTemplates.map((labour, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      addLabourTemplate(labour.role, labour.dailyRate, labour.days);
+                      setShowLabourModal(false);
+                    }}
+                    className="w-full bg-[#1e3a2a] border border-green-800 rounded-lg p-4 text-left hover:bg-[#2a4a35] transition-colors"
+                  >
+                    <div className="font-semibold text-white">{labour.role}</div>
+                    <div className="text-sm text-gray-400 mt-1">
+                      {formatCurrency(labour.dailyRate)}/day × {labour.days} day(s)
+                    </div>
+                    <div className="text-green-400 font-medium mt-1">{formatCurrency(labour.dailyRate * labour.days)}</div>
+                  </button>
+                ))}
+                <button
+                  onClick={() => {
+                    setShowLabourModal(false);
+                    navigate('labour');
+                  }}
+                  className="w-full bg-green-700 hover:bg-green-600 text-white rounded-lg p-3 text-center transition-colors"
+                >
+                  🔧 {t.quote.openLabourCalculator || 'Open Full Labour Calculator'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

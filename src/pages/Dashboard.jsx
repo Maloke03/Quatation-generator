@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
+import { useTranslation } from '../i18n/useTranslation';
 import { getAllQuotes, getAllClients, getAllInvoices } from '../db';
 import { formatCurrency, formatDate } from '../utils/format';
 import { Card, EmptyState, StatusBadge, Button, TopBar } from '../components/UI';

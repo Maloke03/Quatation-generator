@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
 import { getSetting, setSetting } from '../db';
 import { Input, Button, TopBar, Card } from '../components/UI';
-import { Check } from 'lucide-react';
+import { Check, Package, Users, Database, Calculator } from 'lucide-react';
 
-export default function Settings() {
+export default function Settings({ navigate }) {
   const { t, lang, setLang } = useLang();
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', regNumber: '' });
   const [saved, setSaved] = useState(false);
@@ -46,6 +46,35 @@ export default function Settings() {
                 {l.label}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Tools section - V3 */}
+        <div>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Database size={12} /> {t.common?.tools || 'Tools'}
+          </h2>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => navigate('materials')}
+              className="bg-[#1e3a2a] border border-[#2d5a3d] rounded-xl p-3 hover:border-green-700 transition-all cursor-pointer"
+            >
+              <div className="flex flex-col items-center text-center gap-2">
+                <Package size={24} className="text-green-400" />
+                <span className="text-sm font-medium text-white">{t.materials?.title || 'Material Price DB'}</span>
+                <span className="text-xs text-gray-400">Save & reuse prices</span>
+              </div>
+            </button>
+            <button
+              onClick={() => navigate('labour')}
+              className="bg-[#1e3a2a] border border-[#2d5a3d] rounded-xl p-3 hover:border-green-700 transition-all cursor-pointer"
+            >
+              <div className="flex flex-col items-center text-center gap-2">
+                <Calculator size={24} className="text-green-400" />
+                <span className="text-sm font-medium text-white">{t.labour?.calculator || 'Labour Calculator'}</span>
+                <span className="text-xs text-gray-400">Workers × days × rate</span>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -95,9 +124,16 @@ export default function Settings() {
         {/* App info */}
         <Card>
           <div className="text-center py-2">
-            <div className="text-green-400 font-bold text-lg">{t.appName}</div>
-            <div className="text-gray-500 text-xs mt-1">v1.0 · Offline-first PWA</div>
-            <div className="text-gray-600 text-xs mt-1">Data stored locally on your device</div>
+            <div className="text-green-400 font-bold text-lg flex items-center justify-center gap-2">
+              <span>{t.appName}</span>
+              <span className="text-xs bg-green-900 px-2 py-0.5 rounded-full">v3.0</span>
+            </div>
+            <div className="text-gray-500 text-xs mt-1">Offline-first PWA · Data on device</div>
+            <div className="text-gray-600 text-xs mt-2 flex items-center justify-center gap-3">
+              <span className="flex items-center gap-1"><Package size={10} /> Price DB</span>
+              <span className="flex items-center gap-1"><Calculator size={10} /> Labour Calc</span>
+              <span className="flex items-center gap-1"><Users size={10} /> Clients</span>
+            </div>
           </div>
         </Card>
       </div>

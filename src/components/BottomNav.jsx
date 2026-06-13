@@ -1,46 +1,96 @@
 import { useLang } from '../i18n/LangContext';
-import { LayoutDashboard, Users, FileText, Receipt, Settings } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  Users, 
+  FileText, 
+  Receipt, 
+  Settings,
+  Package,
+  Briefcase
+} from 'lucide-react';
 
+// Define tabs with their configuration - using consistent structure
 const tabs = [
-  { key: 'dashboard', icon: LayoutDashboard },
-  { key: 'clients',   icon: Users },
-  { key: 'quotes',    icon: FileText },
-  { key: 'invoices',  icon: Receipt },
-  { key: 'settings',  icon: Settings },
+  { key: 'dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
+  { key: 'clients',   icon: Users,           labelKey: 'nav.clients' },
+  { key: 'quotes',    icon: FileText,        labelKey: 'nav.quotes' },
+  { key: 'invoices',  icon: Receipt,         labelKey: 'invoice.title' },
+  { key: 'projects',  icon: Briefcase,       labelKey: 'projects.title' },
+  { key: 'materials', icon: Package,         labelKey: 'materials.title' },
+  { key: 'settings',  icon: Settings,        labelKey: 'common.settings' }
 ];
+
+// Fallback labels in case translation keys are missing
+const fallbackLabels = {
+  'nav.dashboard': 'Dashboard',
+  'nav.clients': 'Clients',
+  'nav.quotes': 'Quotes',
+  'invoice.title': 'Invoices',
+  'projects.title': 'Projects',
+  'materials.title': 'Materials',
+  'common.settings': 'Settings'
+};
 
 export default function BottomNav({ current, navigate }) {
   const { t } = useLang();
 
-  const labels = {
-    dashboard: t.nav.dashboard,
-    clients:   t.nav.clients,
-    quotes:    t.nav.quotes,
-    invoices:  t.invoice?.title || 'Invoices',
-    settings:  t.common.settings,
+  // Helper to get translation with fallback - with safe checking
+  const getLabel = (key) => {
+    // If t is undefined or null, return fallback immediately
+    if (!t || typeof t !== 'object') {
+      return fallbackLabels[key] || key.split('.').pop();
+    }
+    
+    // Split nested keys like 'nav.dashboard' or 'invoice.title'
+    const parts = key.split('.');
+    let value = t;
+    
+    for (const part of parts) {
+      if (value && typeof value === 'object') {
+        value = value[part];
+      } else {
+        value = undefined;
+        break;
+      }
+    }
+    
+    return value || fallbackLabels[key] || key.split('.').pop();
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-30 bg-[#0a1810]/95 backdrop-blur-md border-t border-[#1e3a2a] safe-bottom"
-         style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)' }}>
-      {tabs.map(({ key, icon: Icon }) => {
-        const active = current === key;
+    <nav 
+      className="fixed bottom-0 left-0 right-0 z-30 bg-[#0a1810]/95 backdrop-blur-md border-t border-[#1e3a2a] safe-bottom"
+      style={{ display: 'grid', gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
+      role="navigation"
+      aria-label="Main navigation"
+    >
+      {tabs.map(({ key, icon: Icon, labelKey }) => {
+        const isActive = current === key;
+        
         return (
           <button
             key={key}
             onClick={() => navigate(key)}
-            style={{ minWidth: 0 }}
-            className={`flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
-              active ? 'text-green-400' : 'text-gray-600 hover:text-gray-400'
-            }`}
+            className={`
+              flex flex-col items-center justify-center gap-0.5 py-2 
+              transition-colors duration-200 ease-in-out
+              focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1
+              ${isActive ? 'text-green-400' : 'text-gray-600 hover:text-gray-400'}
+            `}
+            aria-label={getLabel(labelKey)}
+            aria-current={isActive ? 'page' : undefined}
           >
-            <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+            <Icon 
+              size={20} 
+              strokeWidth={isActive ? 2.5 : 1.8}
+              className="transition-all duration-200"
+            />
             <span className="text-[8px] font-medium leading-none truncate w-full text-center px-0.5">
-              {labels[key]}
+              {getLabel(labelKey)}
             </span>
           </button>
         );
       })}
-    </div>
+    </nav>
   );
 }
