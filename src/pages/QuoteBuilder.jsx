@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { useTranslation } from '../i18n/useTranslation';
+// import { useTranslation } from '../i18n/useTranslation'; // REMOVED
 import { getAllClients, saveQuote, getQuote, getAllMaterials } from '../db';
 import { Input, Select, Textarea, Button, TopBar, Card } from '../components/UI';
 import { calcLineTotal, calcSubtotal, calcVAT, calcGrandTotal, formatCurrency, futureDate, todayISO } from '../utils/format';
-import { Plus, Trash2, ChevronLeft, Eye, Package, Users } from 'lucide-react';
+import { Plus, Trash2, ChevronLeft, Package, Users } from 'lucide-react'; // Removed Eye
 
 const COMMON_ITEMS = [
   'Cement (50kg bags)', 'Bricks', 'Sand (m³)', 'Stone (m³)',
@@ -107,12 +107,21 @@ export default function QuoteBuilder({ navigate, params = {} }) {
     status: 'draft',
   });
 
-  // Load clients and materials on mount
-  useEffect(() => {
-    getAllClients().then(setClients);
-    loadMaterials();
+  const loadMaterials = async () => {
+    try {
+      const mats = await getAllMaterials();
+      setMaterials(mats || []);
+    } catch (error) {
+      console.error('Failed to load materials:', error);
+      setMaterials([]);
+    }
+  };
+
+  const loadData = useCallback(async () => {
+    const allClients = await getAllClients();
+    setClients(allClients);
+    await loadMaterials();
     
-    // Check for pending labour items from LabourCalculator
     const pendingLabour = localStorage.getItem('pendingLabourItems');
     if (pendingLabour) {
       const labourItems = JSON.parse(pendingLabour);
@@ -129,22 +138,15 @@ export default function QuoteBuilder({ navigate, params = {} }) {
       }
     }
     
-    if (isEdit) {
-      getQuote(params.quoteId).then(q => {
-        if (q) setForm(q);
-      });
+    if (isEdit && params.quoteId) {
+      const q = await getQuote(params.quoteId);
+      if (q) setForm(q);
     }
-  }, []);
+  }, [isEdit, params.quoteId]);
 
-  const loadMaterials = async () => {
-    try {
-      const mats = await getAllMaterials();
-      setMaterials(mats || []);
-    } catch (error) {
-      console.error('Failed to load materials:', error);
-      setMaterials([]);
-    }
-  };
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
 
@@ -159,7 +161,6 @@ export default function QuoteBuilder({ navigate, params = {} }) {
     set('items', form.items.filter((_, idx) => idx !== i));
   }
 
-  // Add material from price list
   function addFromPriceList(material) {
     const newItem = {
       id: Date.now(),
@@ -172,7 +173,6 @@ export default function QuoteBuilder({ navigate, params = {} }) {
     setShowPriceList(false);
   }
 
-  // Add pre-defined labour template
   function addLabourTemplate(role, dailyRate, days) {
     const total = dailyRate * days;
     const newItem = {
@@ -190,52 +190,49 @@ export default function QuoteBuilder({ navigate, params = {} }) {
   const grandTotal = calcGrandTotal(subtotal, form.includeVat);
 
   function validate() {
-  const e = {};
-  if (!form.clientId) e.clientId = t.quote.noClient;
-  if (!form.projectName?.trim()) e.projectName = t.common.required;
-  // Fix: Check items array properly
-  const hasItems = form.items?.some(i => i.name?.trim() && parseFloat(i.qty) > 0);
-  if (!hasItems) e.items = t.quote.noItems;
-  return e;
-}
+    const e = {};
+    if (!form.clientId) e.clientId = t.quote.noClient;
+    if (!form.projectName.trim()) e.projectName = t.common.required;
+    const hasItems = form.items.some(i => i.name.trim() && parseFloat(i.qty) > 0);
+    if (!hasItems) e.items = t.quote.noItems;
+    return e;
+  }
 
   async function handleSave() {
-  const e = validate();
-  if (Object.keys(e).length) { setErrors(e); return; }
-  setSaving(true);
-  try {
-    // Transform items to match the format expected by QuoteView
-    const quoteData = {
-      clientId: form.clientId,
-      projectName: form.projectName,
-      date: form.date,
-      validUntil: form.validUntil,
-      includeVat: form.includeVat,
-      terms: form.terms,
-      notes: form.notes,
-      items: form.items
-        .filter(item => item.name?.trim() && parseFloat(item.qty) > 0)
-        .map(item => ({
-          name: item.name,
-          qty: parseFloat(item.qty) || 0,
-          unit: item.unit || 'each',
-          unitPrice: parseFloat(item.unitPrice) || 0,
-        })),
-      status: form.status || 'draft'
-    };
-    
-    const saved = await saveQuote(quoteData);
-    navigate('quote-view', { quoteId: saved.id });
-  } catch (error) {
-    console.error('Save error:', error);
-    setErrors({ save: error.message });
-    alert('Error saving quote: ' + error.message);
-  } finally {
-    setSaving(false);
+    const e = validate();
+    if (Object.keys(e).length) { setErrors(e); return; }
+    setSaving(true);
+    try {
+      const quoteData = {
+        clientId: form.clientId,
+        projectName: form.projectName,
+        date: form.date,
+        validUntil: form.validUntil,
+        includeVat: form.includeVat,
+        terms: form.terms,
+        notes: form.notes,
+        items: form.items
+          .filter(item => item.name?.trim() && parseFloat(item.qty) > 0)
+          .map(item => ({
+            name: item.name,
+            qty: parseFloat(item.qty) || 0,
+            unit: item.unit || 'each',
+            unitPrice: parseFloat(item.unitPrice) || 0,
+          })),
+        status: form.status || 'draft'
+      };
+      
+      const saved = await saveQuote(quoteData);
+      navigate('quote-view', { quoteId: saved.id });
+    } catch (error) {
+      console.error('Save error:', error);
+      setErrors({ save: error.message });
+      alert('Error saving quote: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
   }
-}
 
-  // Labour templates
   const labourTemplates = [
     { role: t.quote.labour?.bricklayer || 'Bricklayer', dailyRate: 250, days: 1 },
     { role: t.quote.labour?.general || 'General Worker', dailyRate: 150, days: 1 },

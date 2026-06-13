@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useLang } from '../i18n/LangContext';
 import { getQuote, getClient, updateQuoteStatus, getInvoiceByQuote, saveInvoice, getProjectByQuote, saveProject } from '../db';
 import { formatCurrency, formatDate, futureDate } from '../utils/format';
@@ -15,7 +15,7 @@ export default function QuoteView({ navigate, params = {} }) {
   const [converting, setConverting] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     const q = await getQuote(params.quoteId);
     if (!q) { navigate('quotes'); return; }
     setQuote(q);
@@ -30,9 +30,11 @@ export default function QuoteView({ navigate, params = {} }) {
     // Check if a project already exists for this quote
     const proj = await getProjectByQuote(q.id);
     setExistingProject(proj);
-  }
+  }, [params.quoteId, navigate]);
 
-  useEffect(() => { load(); }, [params.quoteId]);
+  useEffect(() => { 
+    load(); 
+  }, [load]);
 
   async function handleConvertToInvoice() {
     setConverting(true);

@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { useTranslation } from '../i18n/useTranslation';
 import { getInvoice, getClient, getPaymentsByInvoice, addPayment, deletePayment } from '../db';
 import { formatCurrency, formatDate, todayISO } from '../utils/format';
 import { Button, Card, TopBar, Modal, Confirm, Input, Select } from '../components/UI';
@@ -100,15 +99,24 @@ export default function InvoiceView({ navigate, params = {} }) {
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [confirmPayId, setConfirmPayId] = useState(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     const inv = await getInvoice(params.invoiceId);
-    if (!inv) { navigate('invoices'); return; }
+    if (!inv) { 
+      navigate('invoices'); 
+      return; 
+    }
     setInvoice(inv);
-    if (inv.clientId) getClient(inv.clientId).then(setClient);
-    getPaymentsByInvoice(inv.id).then(setPayments);
-  }
+    if (inv.clientId) {
+      const cl = await getClient(inv.clientId);
+      setClient(cl);
+    }
+    const pays = await getPaymentsByInvoice(inv.id);
+    setPayments(pays);
+  }, [params.invoiceId, navigate]);
 
-  useEffect(() => { load(load); }, [params.invoiceId]);
+  useEffect(() => { 
+    load(); 
+  }, [load]);
 
   if (!invoice) {
     return <div className="flex items-center justify-center h-full text-gray-500 py-20">{t.common.loading}</div>;

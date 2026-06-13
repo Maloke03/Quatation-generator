@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { useTranslation } from '../i18n/useTranslation';
 import { getAllInvoices, getAllClients, deleteInvoice } from '../db';
 import { formatCurrency, formatDate } from '../utils/format';
+// eslint-disable-next-line 
 import { Card, Button, EmptyState, Confirm, TopBar } from '../components/UI';
 import { Search, Trash2 } from 'lucide-react';
 

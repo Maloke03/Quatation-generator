@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { getAllProjects, updateProjectStatus } from '../db';
-import { TopBar, Card, Button } from '../components/UI';
+import { getAllProjects } from '../db'; // Removed updateProjectStatus
+import { TopBar, Card } from '../components/UI'; // Removed Button
 import { ChevronLeft, Briefcase, Clock, PlayCircle, CheckCircle } from 'lucide-react';
 
 export default function Projects({ navigate }) {

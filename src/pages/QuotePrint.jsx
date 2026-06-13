@@ -23,7 +23,7 @@ export default function QuotePrint({ navigate, params = {} }) {
       if (q.clientId) getClient(q.clientId).then(setClient);
     }
     load();
-  }, [params.quoteId]);
+  }, [params.quoteId, navigate]);
 
   if (!quote) return null;
 

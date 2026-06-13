@@ -1,11 +1,11 @@
 // IndexedDB wrapper using native browser API (no external dependency)
 
 const DB_NAME = 'quotepro_db';
-const DB_VERSION = 4;
+const DB_VERSION = 4;  // Upgraded to V4
 
 let _db = null;
 let _dbInitPromise = null;
-
+// let _isUpgrading = false;  // REMOVED - was unused
 
 // Default materials for V3 (Lesotho construction)
 const DEFAULT_MATERIALS = [
@@ -80,7 +80,6 @@ function initDB() {
         
         // Create stores only if upgrading
         if (oldVersion < 1) {
-          // Version 1 stores
           if (!db.objectStoreNames.contains('clients')) {
             const cs = db.createObjectStore('clients', { keyPath: 'id' });
             cs.createIndex('name', 'name');
@@ -100,7 +99,6 @@ function initDB() {
         }
         
         if (oldVersion < 2) {
-          // Version 2 stores (Invoices & Payments)
           if (!db.objectStoreNames.contains('invoices')) {
             const inv = db.createObjectStore('invoices', { keyPath: 'id' });
             inv.createIndex('quoteId', 'quoteId');
@@ -117,14 +115,12 @@ function initDB() {
         }
         
         if (oldVersion < 3) {
-          // Version 3 stores (Materials)
           if (!db.objectStoreNames.contains('materials')) {
             const mat = db.createObjectStore('materials', { keyPath: 'id' });
             mat.createIndex('name', 'name');
             mat.createIndex('category', 'category');
             mat.createIndex('pricePerUnit', 'pricePerUnit');
             
-            // Add default materials only if this is a new database (oldVersion === 0)
             if (oldVersion === 0) {
               const transaction = event.target.transaction;
               const materialStore = transaction.objectStore('materials');
@@ -136,7 +132,6 @@ function initDB() {
         }
         
         if (oldVersion < 4) {
-          // Version 4 stores (Projects & Expenses)
           if (!db.objectStoreNames.contains('projects')) {
             const proj = db.createObjectStore('projects', { keyPath: 'id' });
             proj.createIndex('quoteId', 'quoteId', { unique: true });
@@ -158,7 +153,6 @@ function initDB() {
     };
     
     checkRequest.onerror = () => {
-      // If we can't check, just try to open with current version
       const request = indexedDB.open(DB_NAME, DB_VERSION);
       
       request.onerror = (event) => {
@@ -236,7 +230,7 @@ function initDB() {
   return _dbInitPromise;
 }
 
-// Wait for database to be ready
+// Get database instance
 async function getDB() {
   return await initDB();
 }
@@ -388,7 +382,6 @@ export async function getQuote(id) {
 export async function saveQuote(quote) {
   if (!quote || !quote.clientId) throw new Error('Client ID is required');
   
-  // Check items (not lineItems) for validation
   const hasItems = quote.items?.some(i => i.name?.trim() && parseFloat(i.qty) > 0);
   if (!hasItems) throw new Error('Quote must have at least one line item');
   
@@ -423,7 +416,6 @@ export async function saveQuote(quote) {
         const count = all.filter(q => q.quoteNumber?.startsWith(`QP-${year}`)).length + 1;
         const quoteNumber = `QP-${year}-${String(count).padStart(3, '0')}`;
         
-        // Calculate totals from items
         const subtotal = (quote.items || []).reduce((sum, item) => {
           return sum + ((parseFloat(item.qty) || 0) * (parseFloat(item.unitPrice) || 0));
         }, 0);
@@ -803,36 +795,6 @@ export async function searchMaterials(query) {
   );
 }
 
-// ─── SETTINGS ──────────────────────────────────────────────────────────────
-
-export async function getSetting(key) {
-  if (!key) return null;
-  const db = await getDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction('settings', 'readonly');
-    const store = transaction.objectStore('settings');
-    const request = store.get(key);
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-export async function setSetting(key, value) {
-  if (!key) throw new Error('Setting key is required');
-  
-  const db = await getDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction('settings', 'readwrite');
-    const store = transaction.objectStore('settings');
-    const request = store.put(value, key);
-    request.onsuccess = () => {
-      clearCache('settings');
-      resolve(value);
-    };
-    request.onerror = () => reject(request.error);
-  });
-}
-
 // ─── PROJECTS (V4) ─────────────────────────────────────────────────────────
 
 export async function getAllProjects() {
@@ -1047,6 +1009,36 @@ export async function getTotalExpensesByProject(projectId) {
   return expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
 }
 
+// ─── SETTINGS ──────────────────────────────────────────────────────────────
+
+export async function getSetting(key) {
+  if (!key) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('settings', 'readonly');
+    const store = transaction.objectStore('settings');
+    const request = store.get(key);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function setSetting(key, value) {
+  if (!key) throw new Error('Setting key is required');
+  
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('settings', 'readwrite');
+    const store = transaction.objectStore('settings');
+    const request = store.put(value, key);
+    request.onsuccess = () => {
+      clearCache('settings');
+      resolve(value);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
 // ─── UTILITY ────────────────────────────────────────────────────────────────
 
 export async function getAllCompanySettings() {
@@ -1059,7 +1051,7 @@ export async function getAllCompanySettings() {
 }
 
 export async function clearAllData() {
-  const stores = ['clients', 'quotes', 'invoices', 'payments', 'materials', 'settings', 'projects', 'expenses'];
+  const stores = ['clients', 'quotes', 'invoices', 'payments', 'materials', 'projects', 'expenses', 'settings'];
   const db = await getDB();
   
   return new Promise((resolve, reject) => {

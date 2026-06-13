@@ -1,278 +1,170 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { getInvoice, getClient, getPaymentsByInvoice, getSetting } from '../db';
+import { getInvoice, getClient, getSetting } from '../db';
 import { formatCurrency, formatDate } from '../utils/format';
-import { Button, TopBar } from '../components/UI';
+import { TopBar, Button } from '../components/UI';
 import { ChevronLeft, Printer } from 'lucide-react';
 
-export default function InvoicePrint({ navigate, params = {} }) {
+export default function InvoicePrint({ navigate, params }) {
   const { t } = useLang();
   const [invoice, setInvoice] = useState(null);
   const [client, setClient] = useState(null);
-  const [payments, setPayments] = useState([]);
-  const [company, setCompany] = useState(null);
+  const [company, setCompany] = useState({});
+
+  const loadData = useCallback(async () => {
+    const inv = await getInvoice(params.invoiceId);
+    if (!inv) {
+      navigate('invoices');
+      return;
+    }
+    setInvoice(inv);
+    
+    const cl = await getClient(inv.clientId);
+    setClient(cl);
+    
+    const comp = await getSetting('company');
+    setCompany(comp || {});
+  }, [params.invoiceId, navigate]);
 
   useEffect(() => {
-    async function load() {
-      const [inv, comp] = await Promise.all([navigate
-        getInvoice(params.invoiceId),
-        getSetting('company'),
-      ]);
-      if (!inv) { navigate('invoices'); return; }
-      setInvoice(inv);
-      setCompany(comp);
-      if (inv.clientId) getClient(inv.clientId).then(setClient);
-      getPaymentsByInvoice(inv.id).then(setPayments);
-    }
-    load();
-  }, [params.invoiceId]);
+    loadData();
+  }, [loadData]);
 
-  if (!invoice) return null;
+  const handlePrint = () => {
+    window.print();
+  };
 
-  const grandTotal = invoice.grandTotal || 0;
-  const amountPaid = invoice.amountPaid || 0;
-  const balance = grandTotal - amountPaid;
-  const isPaid = invoice.status === 'paid';
+  if (!invoice) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-500 py-20">
+        {t.common.loading}
+      </div>
+    );
+  }
+
+  const subtotal = invoice.subtotal || 0;
+  const vat = invoice.includeVat ? subtotal * 0.14 : 0;
+  const grandTotal = invoice.grandTotal || subtotal + vat;
 
   return (
-    <>
-      {/* Screen chrome */}
-      <div className="print:hidden">
-        <TopBar
-          title={`${t.invoice.invoice} ${invoice.invoiceNumber}`}
-          left={
-            <button onClick={() => navigate('invoice-view', { invoiceId: invoice.id })} className="text-gray-400 hover:text-white mr-1">
-              <ChevronLeft size={22} />
-            </button>
-          }
-          right={
-            <Button size="sm" onClick={() => window.print()}>
-              <Printer size={15} /> {t.print.print}
-            </Button>
-          }
-        />
-        <div className="p-4 pb-6">
-          <p className="text-gray-500 text-sm text-center">Preview below. Tap "Print / Save PDF" to save or share.</p>
-        </div>
-      </div>
+    <div className="flex flex-col min-h-full">
+      <TopBar
+        title={t.invoice.invoice}
+        left={
+          <button onClick={() => navigate('invoices')} className="text-gray-400 hover:text-white mr-1">
+            <ChevronLeft size={22} />
+          </button>
+        }
+        right={
+          <Button size="sm" onClick={handlePrint}>
+            <Printer size={15} /> {t.print.print}
+          </Button>
+        }
+      />
 
-      {/* Printable invoice */}
-      <div
-        className="print-area mx-auto bg-white text-gray-900"
-        style={{
-          maxWidth: '210mm',
-          minHeight: '297mm',
-          padding: '16mm 14mm',
-          fontFamily: "'Inter', sans-serif",
-          fontSize: '10pt',
-          lineHeight: '1.5',
-          position: 'relative',
-        }}
-      >
-        {/* PAID watermark stamp */}
-        {isPaid && (
-          <div style={{
-            position: 'absolute',
-            top: '55mm',
-            right: '20mm',
-            fontSize: '40pt',
-            fontWeight: '900',
-            color: 'rgba(22,101,52,0.12)',
-            border: '6px solid rgba(22,101,52,0.12)',
-            padding: '4mm 8mm',
-            borderRadius: '4mm',
-            transform: 'rotate(-20deg)',
-            letterSpacing: '4px',
-            pointerEvents: 'none',
-            userSelect: 'none',
-          }}>
-            PAID
+      <div className="p-4 print:p-0">
+        <div className="bg-white text-gray-800 rounded-xl print:rounded-none p-6 print:p-4">
+          {/* Header */}
+          <div className="border-b pb-4 mb-4">
+            <h1 className="text-2xl font-bold text-green-600">{t.invoice.invoice}</h1>
+            <p className="text-gray-500">{invoice.invoiceNumber}</p>
           </div>
-        )}
 
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8mm' }}>
-          <div>
-            <div style={{ fontSize: '22pt', fontWeight: '800', color: '#166534', letterSpacing: '-0.5px' }}>
-              {company?.name || 'Your Company'}
+          {/* Company & Client */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div>
+              <p className="text-xs text-gray-500 uppercase">{t.print.preparedBy}</p>
+              <p className="font-semibold">{company?.name || 'Your Company'}</p>
+              {company?.phone && <p className="text-sm">{company.phone}</p>}
+              {company?.email && <p className="text-sm">{company.email}</p>}
             </div>
-            {company?.address && <div style={{ color: '#555', marginTop: '2mm', fontSize: '9pt' }}>{company.address}</div>}
-            {company?.phone && <div style={{ color: '#555', fontSize: '9pt' }}>{company.phone}</div>}
-            {company?.email && <div style={{ color: '#555', fontSize: '9pt' }}>{company.email}</div>}
-            {company?.regNumber && <div style={{ color: '#888', fontSize: '8pt' }}>Reg: {company.regNumber}</div>}
+            <div>
+              <p className="text-xs text-gray-500 uppercase">{t.print.preparedFor}</p>
+              <p className="font-semibold">{client?.name || 'N/A'}</p>
+              {client?.phone && <p className="text-sm">{client.phone}</p>}
+              {client?.location && <p className="text-sm">{client.location}</p>}
+            </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '18pt', fontWeight: '800', color: '#166534', letterSpacing: '2px' }}>
-              INVOICE
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div>
+              <p className="text-xs text-gray-500">{t.print.date}</p>
+              <p>{formatDate(invoice.date)}</p>
             </div>
-            <div style={{ color: '#555', marginTop: '2mm', fontSize: '9pt' }}>
-              <strong>{t.invoice.invoiceNumber}:</strong> {invoice.invoiceNumber}
+            <div>
+              <p className="text-xs text-gray-500">{t.invoice.dueDate}</p>
+              <p>{formatDate(invoice.dueDate)}</p>
             </div>
-            {invoice.quoteId && (
-              <div style={{ color: '#888', fontSize: '8pt' }}>
-                Ref: {invoice.quoteNumber || ''}
-              </div>
-            )}
-            <div style={{ color: '#555', fontSize: '9pt' }}>
-              <strong>{t.print.date}:</strong> {formatDate(invoice.date)}
-            </div>
-            {invoice.dueDate && (
-              <div style={{ color: '#c00', fontSize: '9pt', fontWeight: '700' }}>
-                <strong>{t.invoice.dueDate}:</strong> {formatDate(invoice.dueDate)}
-              </div>
-            )}
           </div>
-        </div>
 
-        {/* Divider */}
-        <div style={{ borderTop: '2px solid #166534', marginBottom: '6mm' }} />
-
-        {/* Client + Project */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8mm', marginBottom: '6mm' }}>
-          <div>
-            <div style={{ fontSize: '7pt', fontWeight: '700', color: '#166534', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2mm' }}>
-              {t.print.preparedFor}
-            </div>
-            <div style={{ fontWeight: '700', fontSize: '11pt' }}>{client?.name || '—'}</div>
-            {client?.phone && <div style={{ color: '#555', fontSize: '9pt' }}>{client.phone}</div>}
-            {client?.email && <div style={{ color: '#555', fontSize: '9pt' }}>{client.email}</div>}
-            {client?.location && <div style={{ color: '#555', fontSize: '9pt' }}>{client.location}</div>}
-          </div>
-          <div>
-            <div style={{ fontSize: '7pt', fontWeight: '700', color: '#166534', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2mm' }}>
-              {t.print.projectDesc}
-            </div>
-            <div style={{ fontWeight: '700', fontSize: '11pt' }}>{invoice.projectName || '—'}</div>
-          </div>
-        </div>
-
-        {/* Items table */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '6mm' }}>
-          <thead>
-            <tr style={{ background: '#166534', color: 'white' }}>
-              <th style={{ padding: '3mm 4mm', textAlign: 'left', fontSize: '8pt', fontWeight: '700' }}>Description</th>
-              <th style={{ padding: '3mm 2mm', textAlign: 'center', fontSize: '8pt', fontWeight: '700', width: '12mm' }}>Qty</th>
-              <th style={{ padding: '3mm 2mm', textAlign: 'center', fontSize: '8pt', fontWeight: '700', width: '14mm' }}>Unit</th>
-              <th style={{ padding: '3mm 2mm', textAlign: 'right', fontSize: '8pt', fontWeight: '700', width: '22mm' }}>Unit Price</th>
-              <th style={{ padding: '3mm 4mm', textAlign: 'right', fontSize: '8pt', fontWeight: '700', width: '22mm' }}>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(invoice.items || []).filter(i => i.name).map((item, idx) => {
-              const lineTotal = (parseFloat(item.qty) || 0) * (parseFloat(item.unitPrice) || 0);
-              return (
-                <tr key={idx} style={{ background: idx % 2 === 0 ? '#f0fdf4' : 'white', borderBottom: '1px solid #dcfce7' }}>
-                  <td style={{ padding: '2.5mm 4mm', fontSize: '9pt' }}>{item.name}</td>
-                  <td style={{ padding: '2.5mm 2mm', textAlign: 'center', fontSize: '9pt' }}>{item.qty}</td>
-                  <td style={{ padding: '2.5mm 2mm', textAlign: 'center', fontSize: '9pt', color: '#666' }}>{item.unit}</td>
-                  <td style={{ padding: '2.5mm 2mm', textAlign: 'right', fontSize: '9pt' }}>{formatCurrency(item.unitPrice)}</td>
-                  <td style={{ padding: '2.5mm 4mm', textAlign: 'right', fontSize: '9pt', fontWeight: '600' }}>{formatCurrency(lineTotal)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        {/* Totals */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '6mm' }}>
-          <div style={{ width: '75mm' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2mm 0', borderBottom: '1px solid #dcfce7', fontSize: '9pt' }}>
-              <span style={{ color: '#555' }}>{t.quote.subtotal}</span>
-              <span>{formatCurrency(invoice.subtotal || 0)}</span>
-            </div>
-            {invoice.includeVat && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2mm 0', borderBottom: '1px solid #dcfce7', fontSize: '9pt' }}>
-                <span style={{ color: '#555' }}>{t.quote.vat}</span>
-                <span>{formatCurrency((invoice.subtotal || 0) * 0.14)}</span>
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3mm 4mm', background: '#166534', color: 'white', borderRadius: '3mm', marginTop: '2mm', fontWeight: '800', fontSize: '11pt' }}>
-              <span>{t.quote.grandTotal}</span>
-              <span>{formatCurrency(grandTotal)}</span>
-            </div>
-            {/* Payment summary */}
-            {amountPaid > 0 && (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2mm 0', marginTop: '2mm', fontSize: '9pt', color: '#166534' }}>
-                  <span>{t.invoice.amountPaid}</span>
-                  <span style={{ fontWeight: '700' }}>({formatCurrency(amountPaid)})</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2mm 4mm', background: isPaid ? '#f0fdf4' : '#fff3e0', borderRadius: '3mm', fontWeight: '800', fontSize: '10pt', color: isPaid ? '#166534' : '#c00' }}>
-                  <span>{t.invoice.balance}</span>
-                  <span>{isPaid ? 'PAID' : formatCurrency(balance)}</span>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Payment history */}
-        {payments.length > 0 && (
-          <div style={{ marginBottom: '6mm' }}>
-            <div style={{ fontSize: '7pt', fontWeight: '700', color: '#166534', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2mm' }}>
-              {t.invoice.payments}
-            </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8pt' }}>
+          {/* Items Table */}
+          <div className="mb-6">
+            <table className="w-full text-sm">
               <thead>
-                <tr style={{ background: '#f0fdf4' }}>
-                  <th style={{ padding: '1.5mm 3mm', textAlign: 'left', fontWeight: '600', color: '#555' }}>Date</th>
-                  <th style={{ padding: '1.5mm 3mm', textAlign: 'left', fontWeight: '600', color: '#555' }}>Method</th>
-                  <th style={{ padding: '1.5mm 3mm', textAlign: 'left', fontWeight: '600', color: '#555' }}>Note</th>
-                  <th style={{ padding: '1.5mm 3mm', textAlign: 'right', fontWeight: '600', color: '#555' }}>Amount</th>
+                <tr className="border-b">
+                  <th className="text-left py-2">Description</th>
+                  <th className="text-center py-2">Qty</th>
+                  <th className="text-center py-2">Unit</th>
+                  <th className="text-right py-2">Unit Price</th>
+                  <th className="text-right py-2">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {payments.map((p, idx) => (
-                  <tr key={p.id} style={{ borderBottom: '1px solid #dcfce7' }}>
-                    <td style={{ padding: '1.5mm 3mm', color: '#555' }}>{formatDate(p.date)}</td>
-                    <td style={{ padding: '1.5mm 3mm', color: '#555' }}>{p.method}</td>
-                    <td style={{ padding: '1.5mm 3mm', color: '#888' }}>{p.note || '—'}</td>
-                    <td style={{ padding: '1.5mm 3mm', textAlign: 'right', fontWeight: '600', color: '#166534' }}>{formatCurrency(p.amount)}</td>
+                {(invoice.items || []).map((item, idx) => (
+                  <tr key={idx} className="border-b">
+                    <td className="py-2">{item.name}</td>
+                    <td className="text-center">{item.qty}</td>
+                    <td className="text-center">{item.unit || '-'}</td>
+                    <td className="text-right">{formatCurrency(item.unitPrice)}</td>
+                    <td className="text-right">{formatCurrency((item.qty || 0) * (item.unitPrice || 0))}</td>
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan="4" className="text-right py-2">Subtotal</td>
+                  <td className="text-right">{formatCurrency(subtotal)}</td>
+                </tr>
+                {invoice.includeVat && (
+                  <tr>
+                    <td colSpan="4" className="text-right py-1">VAT (14%)</td>
+                    <td className="text-right">{formatCurrency(vat)}</td>
+                  </tr>
+                )}
+                <tr className="border-t">
+                  <td colSpan="4" className="text-right py-2 font-bold">Grand Total</td>
+                  <td className="text-right font-bold text-green-600">{formatCurrency(grandTotal)}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
-        )}
 
-        {/* Terms */}
-        {invoice.terms && (
-          <div style={{ marginBottom: '5mm' }}>
-            <div style={{ fontSize: '7pt', fontWeight: '700', color: '#166534', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '1.5mm' }}>
-              {t.quote.terms}
+          {/* Status */}
+          <div className="mb-4">
+            <span className={`inline-block px-3 py-1 rounded-full text-sm ${
+              invoice.status === 'paid' ? 'bg-green-100 text-green-700' :
+              invoice.status === 'partial' ? 'bg-yellow-100 text-yellow-700' :
+              'bg-red-100 text-red-700'
+            }`}>
+              {t.invoice.statuses[invoice.status]}
+            </span>
+          </div>
+
+          {/* Terms */}
+          {invoice.terms && (
+            <div className="text-sm text-gray-600 mt-4 pt-4 border-t">
+              <p className="font-semibold mb-1">{t.invoice.paymentTerms}</p>
+              <p>{invoice.terms}</p>
             </div>
-            <div style={{ fontSize: '8pt', color: '#555', lineHeight: '1.6' }}>{invoice.terms}</div>
-          </div>
-        )}
+          )}
 
-        {/* Signatures */}
-        <div style={{ marginTop: '10mm', borderTop: '1px solid #dcfce7', paddingTop: '5mm', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10mm' }}>
-          <div>
-            <div style={{ borderBottom: '1px solid #999', marginBottom: '1.5mm', height: '8mm' }} />
-            <div style={{ fontSize: '8pt', color: '#666' }}>{t.print.signature}</div>
-            <div style={{ fontSize: '8pt', color: '#888', marginTop: '1mm' }}>Date: ___________________</div>
+          {/* Thank you */}
+          <div className="text-center text-gray-500 text-sm mt-6 pt-4 border-t">
+            {t.print.thankYou}
           </div>
-          <div>
-            <div style={{ borderBottom: '1px solid #999', marginBottom: '1.5mm', height: '8mm' }} />
-            <div style={{ fontSize: '8pt', color: '#666' }}>{t.print.acceptance}</div>
-            <div style={{ fontSize: '8pt', color: '#888', marginTop: '1mm' }}>Date: ___________________</div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div style={{ marginTop: '6mm', textAlign: 'center', color: '#888', fontSize: '8pt', borderTop: '1px solid #dcfce7', paddingTop: '3mm' }}>
-          {t.print.thankYou}
         </div>
       </div>
-
-      <style>{`
-        @media print {
-          body { background: white !important; }
-          .print\\:hidden { display: none !important; }
-          .print-area { box-shadow: none !important; margin: 0 !important; max-width: 100% !important; }
-          @page { margin: 0; size: A4; }
-        }
-      `}</style>
-    </>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useLang } from '../i18n/LangContext';
 import { 
   getProject, getClient, getQuote, 
@@ -6,10 +6,11 @@ import {
   getTotalExpensesByProject, updateProjectStatus 
 } from '../db';
 import { TopBar, Card, Button, Confirm } from '../components/UI';
-import { ChevronLeft, Plus, Trash2, DollarSign } from 'lucide-react';
+import { ChevronLeft, Plus, DollarSign } from 'lucide-react'; // Removed Trash2
 
 export default function ProjectView({ navigate, params }) {
-  const { t } = useLang();
+  // eslint-disable-next-line 
+  const { t } = useLang(); // Keep t - it might be used in translations
   const [project, setProject] = useState(null);
   const [client, setClient] = useState(null);
   const [quote, setQuote] = useState(null);
@@ -19,11 +20,7 @@ export default function ProjectView({ navigate, params }) {
   const [newExpense, setNewExpense] = useState({ description: '', amount: '', category: 'materials', date: new Date().toISOString().split('T')[0] });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
-  useEffect(() => {
-    loadData();
-  }, [params.projectId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const p = await getProject(params.projectId);
     if (!p) { navigate('projects'); return; }
     setProject(p);
@@ -39,7 +36,11 @@ export default function ProjectView({ navigate, params }) {
     
     const total = await getTotalExpensesByProject(p.id);
     setTotalExpenses(total);
-  };
+  }, [params.projectId, navigate]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const updateStatus = async (newStatus) => {
     await updateProjectStatus(project.id, newStatus);
