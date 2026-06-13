@@ -21,6 +21,22 @@ const MAIN_TABS = ['dashboard', 'clients', 'quotes', 'invoices', 'settings'];
 export default function App() {
   const [route, setRoute] = useState({ page: 'dashboard', params: {} });
 
+  // Handle initial URL on load (for deep linking)
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path !== '/' && path !== '/Maloke03/Quatation-generator/') {
+      // Extract route from path if needed
+      const cleanPath = path.replace('/Maloke03/Quatation-generator', '').replace(/\/$/, '');
+      if (cleanPath === '/projects') {
+        setRoute({ page: 'projects', params: {} });
+      } else if (cleanPath === '/materials') {
+        setRoute({ page: 'materials', params: {} });
+      } else if (cleanPath === '/invoices') {
+        setRoute({ page: 'invoices', params: {} });
+      }
+    }
+  }, []);
+
   function navigate(page, params = {}) {
     setRoute({ page, params });
     window.scrollTo(0, 0);
