@@ -295,6 +295,7 @@ export const translations = {
       language: "Language",
       settings: "Settings",
       tools: "Tools",
+       more: "More"
     },
   },
 
@@ -594,6 +595,7 @@ export const translations = {
       language: "Puo",
       settings: "Maemo",
       tools: "Lisebelisoa",
+        more: "Tse Ding"
     },
   },
 };
