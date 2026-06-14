@@ -1,11 +1,10 @@
 // IndexedDB wrapper using native browser API (no external dependency)
 
 const DB_NAME = 'quotepro_db';
-const DB_VERSION = 4;  // Upgraded to V4
+const DB_VERSION = 5;  // Upgraded to V5
 
 let _db = null;
 let _dbInitPromise = null;
-// let _isUpgrading = false;  // REMOVED - was unused
 
 // Default materials for V3 (Lesotho construction)
 const DEFAULT_MATERIALS = [
@@ -78,7 +77,7 @@ function initDB() {
         
         console.log(`Upgrading database from version ${oldVersion} to ${targetVersion}`);
         
-        // Create stores only if upgrading
+        // Version 1: Clients, Quotes, Settings
         if (oldVersion < 1) {
           if (!db.objectStoreNames.contains('clients')) {
             const cs = db.createObjectStore('clients', { keyPath: 'id' });
@@ -98,6 +97,7 @@ function initDB() {
           }
         }
         
+        // Version 2: Invoices, Payments
         if (oldVersion < 2) {
           if (!db.objectStoreNames.contains('invoices')) {
             const inv = db.createObjectStore('invoices', { keyPath: 'id' });
@@ -114,6 +114,7 @@ function initDB() {
           }
         }
         
+        // Version 3: Materials
         if (oldVersion < 3) {
           if (!db.objectStoreNames.contains('materials')) {
             const mat = db.createObjectStore('materials', { keyPath: 'id' });
@@ -131,6 +132,7 @@ function initDB() {
           }
         }
         
+        // Version 4: Projects, Expenses
         if (oldVersion < 4) {
           if (!db.objectStoreNames.contains('projects')) {
             const proj = db.createObjectStore('projects', { keyPath: 'id' });
@@ -149,10 +151,46 @@ function initDB() {
             exp.createIndex('createdAt', 'createdAt');
           }
         }
+        
+        // Version 5: Inventory, Workers, Attendance
+        if (oldVersion < 5) {
+          if (!db.objectStoreNames.contains('inventory')) {
+            const inv = db.createObjectStore('inventory', { keyPath: 'id' });
+            inv.createIndex('materialId', 'materialId');
+            inv.createIndex('materialName', 'materialName');
+            inv.createIndex('category', 'category');
+            inv.createIndex('updatedAt', 'updatedAt');
+          }
+          
+          if (!db.objectStoreNames.contains('inventoryTransactions')) {
+            const trans = db.createObjectStore('inventoryTransactions', { keyPath: 'id' });
+            trans.createIndex('materialId', 'materialId');
+            trans.createIndex('type', 'type');
+            trans.createIndex('date', 'date');
+            trans.createIndex('projectId', 'projectId');
+          }
+          
+          if (!db.objectStoreNames.contains('workers')) {
+            const worker = db.createObjectStore('workers', { keyPath: 'id' });
+            worker.createIndex('name', 'name');
+            worker.createIndex('role', 'role');
+            worker.createIndex('isActive', 'isActive');
+            worker.createIndex('createdAt', 'createdAt');
+          }
+          
+          if (!db.objectStoreNames.contains('attendance')) {
+            const attend = db.createObjectStore('attendance', { keyPath: 'id' });
+            attend.createIndex('workerId', 'workerId');
+            attend.createIndex('date', 'date');
+            attend.createIndex('projectId', 'projectId');
+            attend.createIndex('month', 'month');
+          }
+        }
       };
     };
     
     checkRequest.onerror = () => {
+      // Fallback: open with current version
       const request = indexedDB.open(DB_NAME, DB_VERSION);
       
       request.onerror = (event) => {
@@ -169,6 +207,7 @@ function initDB() {
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
         
+        // Create all stores if this is a fresh database
         if (!db.objectStoreNames.contains('clients')) {
           const cs = db.createObjectStore('clients', { keyPath: 'id' });
           cs.createIndex('name', 'name');
@@ -222,6 +261,38 @@ function initDB() {
           exp.createIndex('category', 'category');
           exp.createIndex('date', 'date');
           exp.createIndex('createdAt', 'createdAt');
+        }
+        
+        if (!db.objectStoreNames.contains('inventory')) {
+          const inv = db.createObjectStore('inventory', { keyPath: 'id' });
+          inv.createIndex('materialId', 'materialId');
+          inv.createIndex('materialName', 'materialName');
+          inv.createIndex('category', 'category');
+          inv.createIndex('updatedAt', 'updatedAt');
+        }
+        
+        if (!db.objectStoreNames.contains('inventoryTransactions')) {
+          const trans = db.createObjectStore('inventoryTransactions', { keyPath: 'id' });
+          trans.createIndex('materialId', 'materialId');
+          trans.createIndex('type', 'type');
+          trans.createIndex('date', 'date');
+          trans.createIndex('projectId', 'projectId');
+        }
+        
+        if (!db.objectStoreNames.contains('workers')) {
+          const worker = db.createObjectStore('workers', { keyPath: 'id' });
+          worker.createIndex('name', 'name');
+          worker.createIndex('role', 'role');
+          worker.createIndex('isActive', 'isActive');
+          worker.createIndex('createdAt', 'createdAt');
+        }
+        
+        if (!db.objectStoreNames.contains('attendance')) {
+          const attend = db.createObjectStore('attendance', { keyPath: 'id' });
+          attend.createIndex('workerId', 'workerId');
+          attend.createIndex('date', 'date');
+          attend.createIndex('projectId', 'projectId');
+          attend.createIndex('month', 'month');
         }
       };
     };
@@ -1009,6 +1080,296 @@ export async function getTotalExpensesByProject(projectId) {
   return expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
 }
 
+// ─── INVENTORY (V5) ─────────────────────────────────────────────────────────
+
+export async function getAllInventory() {
+  const inventory = await getAll('inventory');
+  return inventory.sort((a, b) => a.materialName?.localeCompare(b.materialName));
+}
+
+export async function getInventoryItem(id) {
+  if (!id) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('inventory', 'readonly');
+    const store = transaction.objectStore('inventory');
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function getInventoryByMaterial(materialId) {
+  const inventory = await getAll('inventory');
+  return inventory.find(i => i.materialId === materialId) || null;
+}
+
+export async function saveInventoryItem(item) {
+  if (!item || !item.materialName) throw new Error('Material name is required');
+  if (item.stock === undefined || item.stock < 0) throw new Error('Valid stock amount is required');
+  
+  const now = new Date().toISOString();
+  const db = await getDB();
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('inventory', 'readwrite');
+    const store = transaction.objectStore('inventory');
+    
+    if (item.id) {
+      const getRequest = store.get(item.id);
+      getRequest.onsuccess = () => {
+        if (!getRequest.result) {
+          reject(new Error('Inventory item not found'));
+          return;
+        }
+        const updated = { ...getRequest.result, ...item, updatedAt: now };
+        const putRequest = store.put(updated);
+        putRequest.onsuccess = () => {
+          clearCache('inventory');
+          resolve(updated);
+        };
+        putRequest.onerror = () => reject(putRequest.error);
+      };
+      getRequest.onerror = () => reject(getRequest.error);
+    } else {
+      const newItem = {
+        ...item,
+        id: generateId(),
+        createdAt: now,
+        updatedAt: now,
+      };
+      const putRequest = store.put(newItem);
+      putRequest.onsuccess = () => {
+        clearCache('inventory');
+        resolve(newItem);
+      };
+      putRequest.onerror = () => reject(putRequest.error);
+    }
+    
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+export async function addInventoryTransaction(transactionData) {
+  if (!transactionData || !transactionData.materialId) throw new Error('Material ID is required');
+  if (!transactionData.quantity) throw new Error('Quantity is required');
+  
+  const now = new Date().toISOString();
+  const db = await getDB();
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['inventoryTransactions', 'inventory'], 'readwrite');
+    const transStore = transaction.objectStore('inventoryTransactions');
+    const invStore = transaction.objectStore('inventory');
+    
+    const newTransaction = {
+      ...transactionData,
+      id: generateId(),
+      createdAt: now,
+    };
+    transStore.put(newTransaction);
+    
+    const getInv = invStore.get(transactionData.materialId);
+    getInv.onsuccess = () => {
+      const inventory = getInv.result;
+      if (inventory) {
+        const newStock = transactionData.type === 'purchase' 
+          ? (inventory.stock || 0) + transactionData.quantity
+          : (inventory.stock || 0) - transactionData.quantity;
+        
+        invStore.put({ ...inventory, stock: newStock, updatedAt: now });
+        clearCache('inventory');
+        clearCache('inventoryTransactions');
+      }
+    };
+    
+    transaction.oncomplete = () => resolve(newTransaction);
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+export async function getInventoryTransactions(materialId) {
+  const transactions = await getAll('inventoryTransactions');
+  return transactions.filter(t => t.materialId === materialId).sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+export async function getLowStockItems(threshold = 10) {
+  const inventory = await getAll('inventory');
+  return inventory.filter(item => (item.stock || 0) <= (item.reorderLevel || threshold));
+}
+
+// ─── WORKERS (V5) ─────────────────────────────────────────────────────────
+
+export async function getAllWorkers() {
+  const workers = await getAll('workers');
+  return workers.sort((a, b) => a.name?.localeCompare(b.name));
+}
+
+export async function getActiveWorkers() {
+  const workers = await getAll('workers');
+  return workers.filter(w => w.isActive !== false).sort((a, b) => a.name?.localeCompare(b.name));
+}
+
+export async function getWorker(id) {
+  if (!id) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('workers', 'readonly');
+    const store = transaction.objectStore('workers');
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function saveWorker(worker) {
+  if (!worker || !worker.name) throw new Error('Worker name is required');
+  
+  const now = new Date().toISOString();
+  const db = await getDB();
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('workers', 'readwrite');
+    const store = transaction.objectStore('workers');
+    
+    if (worker.id) {
+      const getRequest = store.get(worker.id);
+      getRequest.onsuccess = () => {
+        if (!getRequest.result) {
+          reject(new Error('Worker not found'));
+          return;
+        }
+        const updated = { ...getRequest.result, ...worker, updatedAt: now };
+        const putRequest = store.put(updated);
+        putRequest.onsuccess = () => {
+          clearCache('workers');
+          resolve(updated);
+        };
+        putRequest.onerror = () => reject(putRequest.error);
+      };
+      getRequest.onerror = () => reject(getRequest.error);
+    } else {
+      const newWorker = {
+        ...worker,
+        id: generateId(),
+        isActive: worker.isActive !== false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const putRequest = store.put(newWorker);
+      putRequest.onsuccess = () => {
+        clearCache('workers');
+        resolve(newWorker);
+      };
+      putRequest.onerror = () => reject(putRequest.error);
+    }
+    
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+export async function deleteWorker(id) {
+  clearCache('workers');
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('workers', 'readwrite');
+    const store = transaction.objectStore('workers');
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// ─── ATTENDANCE (V5) ───────────────────────────────────────────────────────
+
+export async function getAttendanceByWorker(workerId, month) {
+  const attendance = await getAll('attendance');
+  return attendance.filter(a => a.workerId === workerId && (!month || a.month === month));
+}
+
+export async function getAttendanceByDate(date) {
+  const attendance = await getAll('attendance');
+  return attendance.filter(a => a.date === date);
+}
+
+export async function getAttendanceByProject(projectId) {
+  const attendance = await getAll('attendance');
+  return attendance.filter(a => a.projectId === projectId);
+}
+
+export async function saveAttendance(attendanceRecord) {
+  if (!attendanceRecord || !attendanceRecord.workerId) throw new Error('Worker ID is required');
+  if (!attendanceRecord.date) throw new Error('Date is required');
+  
+  const now = new Date().toISOString();
+  const db = await getDB();
+  
+  // Check if attendance already exists for this worker on this date
+  const existing = await getAll('attendance');
+  const exists = existing.find(a => a.workerId === attendanceRecord.workerId && a.date === attendanceRecord.date);
+  
+  if (exists && !attendanceRecord.id) {
+    attendanceRecord.id = exists.id;
+  }
+  
+  attendanceRecord.month = attendanceRecord.date.substring(0, 7);
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('attendance', 'readwrite');
+    const store = transaction.objectStore('attendance');
+    
+    if (attendanceRecord.id) {
+      const getRequest = store.get(attendanceRecord.id);
+      getRequest.onsuccess = () => {
+        const updated = { ...getRequest.result, ...attendanceRecord, updatedAt: now };
+        const putRequest = store.put(updated);
+        putRequest.onsuccess = () => {
+          clearCache('attendance');
+          resolve(updated);
+        };
+        putRequest.onerror = () => reject(putRequest.error);
+      };
+      getRequest.onerror = () => reject(getRequest.error);
+    } else {
+      attendanceRecord.id = generateId();
+      attendanceRecord.createdAt = now;
+      const putRequest = store.put(attendanceRecord);
+      putRequest.onsuccess = () => {
+        clearCache('attendance');
+        resolve(attendanceRecord);
+      };
+      putRequest.onerror = () => reject(putRequest.error);
+    }
+    
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+export async function getMonthlyWages(yearMonth) {
+  const attendance = await getAll('attendance');
+  const monthAttendance = attendance.filter(a => a.month === yearMonth);
+  const workers = await getAllWorkers();
+  
+  const wages = {};
+  for (const worker of workers) {
+    const workerAttendance = monthAttendance.filter(a => a.workerId === worker.id);
+    const totalHours = workerAttendance.reduce((sum, a) => sum + (a.hoursWorked || 0), 0);
+    const totalOvertime = workerAttendance.reduce((sum, a) => sum + (a.overtime || 0), 0);
+    const daysPresent = workerAttendance.length;
+    
+    wages[worker.id] = {
+      workerName: worker.name,
+      dailyRate: worker.dailyRate || 0,
+      daysPresent,
+      totalHours,
+      totalOvertime,
+      totalWage: (daysPresent * (worker.dailyRate || 0)) + (totalOvertime * (worker.overtimeRate || (worker.dailyRate / 8) * 1.5 || 0))
+    };
+  }
+  
+  return wages;
+}
+
 // ─── SETTINGS ──────────────────────────────────────────────────────────────
 
 export async function getSetting(key) {
@@ -1051,7 +1412,7 @@ export async function getAllCompanySettings() {
 }
 
 export async function clearAllData() {
-  const stores = ['clients', 'quotes', 'invoices', 'payments', 'materials', 'projects', 'expenses', 'settings'];
+  const stores = ['clients', 'quotes', 'invoices', 'payments', 'materials', 'projects', 'expenses', 'inventory', 'inventoryTransactions', 'workers', 'attendance', 'settings'];
   const db = await getDB();
   
   return new Promise((resolve, reject) => {

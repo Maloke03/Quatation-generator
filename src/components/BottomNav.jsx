@@ -6,7 +6,8 @@ import {
   Receipt, 
   Settings,
   Package,
-  Briefcase
+  Briefcase,
+  Calendar
 } from 'lucide-react';
 
 // Define tabs with their configuration
@@ -16,6 +17,9 @@ const tabs = [
   { key: 'quotes',    icon: FileText,        labelKey: 'nav.quotes' },
   { key: 'invoices',  icon: Receipt,         labelKey: 'invoice.title' },
   { key: 'projects',  icon: Briefcase,       labelKey: 'projects.title' },
+  { key: 'inventory', icon: Package,         labelKey: 'inventory.title' },
+  { key: 'workers',   icon: Users,           labelKey: 'workers.title' },
+  { key: 'attendance', icon: Calendar, labelKey: 'attendance.title' },
   { key: 'materials', icon: Package,         labelKey: 'materials.title' },
   { key: 'settings',  icon: Settings,        labelKey: 'common.settings' }
 ];
@@ -27,6 +31,9 @@ const fallbackLabels = {
   'nav.quotes': 'Quotes',
   'invoice.title': 'Invoices',
   'projects.title': 'Projects',
+  'inventory.title': 'Inventory',
+  'workers.title': 'Workers',
+  'attendance.title': 'Attendance',
   'materials.title': 'Materials',
   'common.settings': 'Settings'
 };

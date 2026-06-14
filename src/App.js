@@ -15,8 +15,12 @@ import MaterialsDB from './pages/MaterialsDB';
 import LabourCalculator from './pages/LabourCalculator';
 import Projects from './pages/Projects';
 import ProjectView from './pages/ProjectView';
+import Inventory from './pages/Inventory';
+import Workers from './pages/Workers';
+import Attendance from './pages/Attendance';
 
-const MAIN_TABS = ['dashboard', 'clients', 'quotes', 'invoices', 'projects', 'materials', 'settings'];
+
+const MAIN_TABS = ['dashboard', 'clients', 'quotes', 'invoices', 'projects', 'materials', 'inventory', 'workers', 'attendance', 'settings'];
 
 export default function App() {
   const [route, setRoute] = useState({ page: 'dashboard', params: {} });
@@ -38,6 +42,8 @@ export default function App() {
         setRoute({ page: 'quotes', params: {} });
       } else if (cleanPath === '/settings') {
         setRoute({ page: 'settings', params: {} });
+      } else if (cleanPath === '/attendance') {
+        setRoute({ page: 'attendance', params: {} });
       }
     }
   }, []);
@@ -67,6 +73,9 @@ export default function App() {
       case 'labour':       return <LabourCalculator navigate={navigate} />;
       case 'projects':     return <Projects navigate={navigate} />;
       case 'project-view': return <ProjectView navigate={navigate} params={params} />;
+      case 'inventory':    return <Inventory navigate={navigate} />;
+      case 'workers':      return <Workers navigate={navigate} />;
+      case 'attendance':   return <Attendance navigate={navigate} />;
       case 'settings':     return <Settings navigate={navigate} />;
       default:             return <Dashboard navigate={navigate} />;
     }

@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useLang } from '../i18n/LangContext';
 // import { useTranslation } from '../i18n/useTranslation'; // REMOVED
-import { getAllClients, saveQuote, getQuote, getAllMaterials } from '../db';
+import { getAllClients, saveQuote, getQuote, getAllMaterials, getAllInventory } from '../db';
 import { Input, Select, Textarea, Button, TopBar, Card } from '../components/UI';
 import { calcLineTotal, calcSubtotal, calcVAT, calcGrandTotal, formatCurrency, futureDate, todayISO } from '../utils/format';
-import { Plus, Trash2, ChevronLeft, Package, Users } from 'lucide-react'; // Removed Eye
+import { Plus, Trash2, ChevronLeft, Package, Users, Box } from 'lucide-react'; // Added Box icon for inventory
 
 const COMMON_ITEMS = [
   'Cement (50kg bags)', 'Bricks', 'Sand (m³)', 'Stone (m³)',
@@ -90,7 +90,9 @@ export default function QuoteBuilder({ navigate, params = {} }) {
 
   const [clients, setClients] = useState([]);
   const [materials, setMaterials] = useState([]);
+  const [inventory, setInventory] = useState([]);
   const [showPriceList, setShowPriceList] = useState(false);
+  const [showInventoryModal, setShowInventoryModal] = useState(false);
   const [showLabourModal, setShowLabourModal] = useState(false);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -117,10 +119,21 @@ export default function QuoteBuilder({ navigate, params = {} }) {
     }
   };
 
+  const loadInventory = async () => {
+    try {
+      const inv = await getAllInventory();
+      setInventory(inv || []);
+    } catch (error) {
+      console.error('Failed to load inventory:', error);
+      setInventory([]);
+    }
+  };
+
   const loadData = useCallback(async () => {
     const allClients = await getAllClients();
     setClients(allClients);
     await loadMaterials();
+    await loadInventory();
     
     const pendingLabour = localStorage.getItem('pendingLabourItems');
     if (pendingLabour) {
@@ -173,6 +186,18 @@ export default function QuoteBuilder({ navigate, params = {} }) {
     setShowPriceList(false);
   }
 
+  function addFromInventory(inventoryItem) {
+    const newItem = {
+      id: Date.now(),
+      name: `${inventoryItem.materialName} (${inventoryItem.unit})`,
+      qty: 1,
+      unit: inventoryItem.unit || 'each',
+      unitPrice: 0, // User will set the price
+    };
+    set('items', [newItem, ...form.items]);
+    setShowInventoryModal(false);
+  }
+
   function addLabourTemplate(role, dailyRate, days) {
     const total = dailyRate * days;
     const newItem = {
@@ -192,8 +217,8 @@ export default function QuoteBuilder({ navigate, params = {} }) {
   function validate() {
     const e = {};
     if (!form.clientId) e.clientId = t.quote.noClient;
-    if (!form.projectName.trim()) e.projectName = t.common.required;
-    const hasItems = form.items.some(i => i.name.trim() && parseFloat(i.qty) > 0);
+    if (!form.projectName?.trim()) e.projectName = t.common.required;
+    const hasItems = form.items.some(i => i.name?.trim() && parseFloat(i.qty) > 0);
     if (!hasItems) e.items = t.quote.noItems;
     return e;
   }
@@ -292,13 +317,22 @@ export default function QuoteBuilder({ navigate, params = {} }) {
             {errors.items && <span className="text-xs text-red-400">{errors.items}</span>}
           </div>
           
-          {/* Quick-add buttons */}
-          <div className="flex gap-2 mb-3">
+          {/* Quick-add buttons - Now 3 buttons */}
+          <div className="flex gap-2 mb-3 flex-wrap">
+            <button
+              onClick={() => {
+                loadInventory();
+                setShowInventoryModal(true);
+              }}
+              className="flex-1 bg-[#1e3a2a] border border-green-700 text-white px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-2 hover:bg-[#2a4a35] transition-colors"
+            >
+              <Box size={16} /> 📦 {t.quote.pickFromInventory || 'Pick from Inventory'}
+            </button>
             <button
               onClick={() => setShowPriceList(true)}
               className="flex-1 bg-[#1e3a2a] border border-green-700 text-white px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-2 hover:bg-[#2a4a35] transition-colors"
             >
-              <Package size={16} /> 📦 {t.quote.pickFromPriceList || 'Price List'}
+              <Package size={16} /> 💰 {t.quote.pickFromPriceList || 'Price List'}
             </button>
             <button
               onClick={() => setShowLabourModal(true)}
@@ -397,6 +431,43 @@ export default function QuoteBuilder({ navigate, params = {} }) {
                       className="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
                     >
                       {t.quote.add || 'Add'}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inventory Modal */}
+      {showInventoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-end z-50">
+          <div className="bg-[#0a1810] border-t border-[#1e3a2a] w-full max-h-[80vh] rounded-t-xl overflow-y-auto">
+            <div className="sticky top-0 bg-[#0a1810] p-4 border-b border-[#1e3a2a] flex justify-between items-center">
+              <h3 className="font-bold text-white">Inventory - Select Material</h3>
+              <button onClick={() => setShowInventoryModal(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
+            </div>
+            <div className="divide-y divide-[#1e3a2a]">
+              {inventory.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <Box size={48} className="mx-auto mb-3 opacity-50" />
+                  <p>No inventory items yet</p>
+                  <p className="text-sm mt-2">Go to Inventory tab to add materials</p>
+                </div>
+              ) : (
+                inventory.map(item => (
+                  <div key={item.id} className="p-4 flex justify-between items-center">
+                    <div>
+                      <div className="font-semibold text-white">{item.materialName}</div>
+                      <div className="text-sm text-gray-500">{item.category || 'Material'} • {item.unit || 'each'}</div>
+                      <div className="text-blue-400 font-medium mt-1">Stock: {item.stock || 0} {item.unit || 'units'}</div>
+                    </div>
+                    <button
+                      onClick={() => addFromInventory(item)}
+                      className="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                    >
+                      Use
                     </button>
                   </div>
                 ))
