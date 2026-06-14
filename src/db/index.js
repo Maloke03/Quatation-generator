@@ -1,7 +1,7 @@
 // IndexedDB wrapper using native browser API (no external dependency)
 
 const DB_NAME = 'quotepro_db';
-const DB_VERSION = 5;  // Upgraded to V5
+const DB_VERSION = 6;  // Upgraded to V6
 
 let _db = null;
 let _dbInitPromise = null;

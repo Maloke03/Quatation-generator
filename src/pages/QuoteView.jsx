@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { getQuote, getClient, updateQuoteStatus, getInvoiceByQuote, saveInvoice, getProjectByQuote, saveProject } from '../db';
+import { getQuote, getClient, updateQuoteStatus, getInvoiceByQuote, saveInvoice, getProjectByQuote, saveProject, getSetting } from '../db';
 import { formatCurrency, formatDate, futureDate } from '../utils/format';
 import { Button, StatusBadge, TopBar, Card, Confirm } from '../components/UI';
+import { shareQuote } from '../utils/share';
+import ShareButton from '../components/ShareButton';
 import { ChevronLeft, Pencil, Printer, CheckCircle, XCircle, Send, FileCheck, Briefcase } from 'lucide-react';
 
 export default function QuoteView({ navigate, params = {} }) {
@@ -14,6 +16,7 @@ export default function QuoteView({ navigate, params = {} }) {
   const [convertConfirmOpen, setConvertConfirmOpen] = useState(false);
   const [converting, setConverting] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [company, setCompany] = useState(null);
 
   const load = useCallback(async () => {
     const q = await getQuote(params.quoteId);
@@ -30,6 +33,10 @@ export default function QuoteView({ navigate, params = {} }) {
     // Check if a project already exists for this quote
     const proj = await getProjectByQuote(q.id);
     setExistingProject(proj);
+    
+    // Load company settings for sharing
+    const companySettings = await getSetting('company');
+    setCompany(companySettings);
   }, [params.quoteId, navigate]);
 
   useEffect(() => { 
@@ -148,6 +155,14 @@ export default function QuoteView({ navigate, params = {} }) {
         }
         right={
           <div className="flex gap-2">
+            <ShareButton
+              onShare={(phone) => shareQuote(quote, client, company, phone)}
+              phoneNumber={client?.phone}
+              variant="outline"
+              size="sm"
+              label="WhatsApp"
+              showPhoneInput={true}
+            />
             <Button size="sm" variant="secondary" onClick={() => navigate('quote-print', { quoteId: quote.id })}>
               <Printer size={15} />
             </Button>
@@ -173,6 +188,24 @@ export default function QuoteView({ navigate, params = {} }) {
             })}
           </div>
         </div>
+
+        {/* WhatsApp Share Card - For easy sharing */}
+        {quote.status !== 'rejected' && (
+          <div className="bg-[#1a3a2a] border border-green-700 rounded-2xl p-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-green-300">Share via WhatsApp</div>
+              <div className="text-xs text-gray-500 mt-0.5">Send this quotation to client</div>
+            </div>
+            <ShareButton
+              onShare={(phone) => shareQuote(quote, client, company, phone)}
+              phoneNumber={client?.phone}
+              variant="primary"
+              size="sm"
+              label="Send Quote"
+              showPhoneInput={true}
+            />
+          </div>
+        )}
 
         {/* Project creation - NEW for V4 */}
         {quote.status === 'accepted' && (
@@ -243,7 +276,7 @@ export default function QuoteView({ navigate, params = {} }) {
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wide">{t.print.preparedBy}</p>
-              <p className="text-white font-semibold mt-1">{quote.companyName || 'Your Company'}</p>
+              <p className="text-white font-semibold mt-1">{company?.name || quote.companyName || 'Your Company'}</p>
             </div>
           </div>
           
@@ -356,15 +389,24 @@ export default function QuoteView({ navigate, params = {} }) {
           </Card>
         )}
 
-        {/* Print button */}
-        <Button
-          onClick={() => navigate('quote-print', { quoteId: quote.id })}
-          variant="secondary"
-          size="lg"
-          className="w-full mt-2"
-        >
-          <Printer size={18} /> {t.print.print}
-        </Button>
+        {/* Action Buttons Row */}
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            onClick={() => navigate('quote-print', { quoteId: quote.id })}
+            variant="secondary"
+            size="lg"
+          >
+            <Printer size={18} /> {t.print.print}
+          </Button>
+          <ShareButton
+            onShare={(phone) => shareQuote(quote, client, company, phone)}
+            phoneNumber={client?.phone}
+            variant="primary"
+            size="lg"
+            label="Share on WhatsApp"
+            showPhoneInput={true}
+          />
+        </div>
       </div>
 
       {/* Convert to Invoice confirm */}

@@ -7,6 +7,8 @@ import {
 } from '../db';
 import { TopBar, Card, Button, Confirm } from '../components/UI';
 import { ChevronLeft, Plus, DollarSign } from 'lucide-react'; // Removed Trash2
+import { shareProjectUpdate } from '../utils/share';
+import ShareButton from '../components/ShareButton';
 
 export default function ProjectView({ navigate, params }) {
   // eslint-disable-next-line 
@@ -149,6 +151,43 @@ export default function ProjectView({ navigate, params }) {
             </div>
           </div>
         </Card>
+
+        {/* WhatsApp Share Card */}
+        <div className="bg-[#1a3a2a] border border-green-700 rounded-2xl p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <div className="text-sm font-semibold text-green-300">Share Update</div>
+              <div className="text-xs text-gray-500 mt-0.5">Send project progress to client</div>
+            </div>
+            <ShareButton
+              onShare={(phone) => shareProjectUpdate(project, client, "Project is progressing well. Current status: " + (project.status === 'in_progress' ? 'In Progress' : 'Not Started'), phone)}
+              phoneNumber={client?.phone}
+              variant="primary"
+              size="sm"
+              label="Send Update"
+              showPhoneInput={true}
+            />
+          </div>
+          
+          {/* Quick message input */}
+          <textarea
+            placeholder="Type a custom update message..."
+            className="w-full bg-[#1e3a2a] text-white p-2 rounded-lg border border-[#2d5a3d] focus:outline-none focus:border-green-500 text-sm"
+            rows="2"
+            id="customUpdateMessage"
+          />
+          <button
+            onClick={() => {
+              const message = document.getElementById('customUpdateMessage').value;
+              if (message) {
+                shareProjectUpdate(project, client, message, client?.phone);
+              }
+            }}
+            className="w-full mt-2 bg-green-700 hover:bg-green-600 text-white py-2 rounded-lg text-sm"
+          >
+            Send Custom Update
+          </button>
+        </div>
 
         {/* Expenses Section */}
         <div>
