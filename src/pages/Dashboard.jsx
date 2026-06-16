@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useLang } from '../i18n/LangContext';
-import { getAllQuotes, getAllClients, getAllInvoices, getAllProjects, getAllInventory, getAllWorkers, getAllExpenses } from '../db';
+import { 
+  getAllQuotes, 
+  getAllClients, 
+  getAllInvoices, 
+  getAllProjects, 
+  getAllInventory, 
+  getAllWorkers, 
+  getAllExpenses 
+} from '../db';
 import { formatCurrency, formatDate } from '../utils/format';
 import { Card, EmptyState, StatusBadge, Button, TopBar } from '../components/UI';
+import { ProfitChart, StatusChart, MonthlyTrendChart } from '../components/Charts';
 import { 
   FileText, 
   Users, 
@@ -100,7 +109,27 @@ export default function Dashboard({ navigate }) {
     return (
       <div className="flex flex-col min-h-full">
         <TopBar title={t.appName} />
-        <div className="p-8 text-center text-gray-400">Loading dashboard...</div>
+        <div className="p-4 space-y-4 pb-24">
+          <div className="h-4 w-2/3 bg-[#1e3a2a] rounded animate-pulse"></div>
+          <div className="grid grid-cols-2 gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-[#0d2014] rounded-xl p-4 animate-pulse">
+                <div className="h-6 bg-[#1e3a2a] rounded w-2/3 mb-2"></div>
+                <div className="h-4 bg-[#1e3a2a] rounded w-1/2"></div>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-4">
+            <div className="h-4 w-1/3 bg-[#1e3a2a] rounded animate-pulse"></div>
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-[#0d2014] rounded-xl p-4 animate-pulse">
+                <div className="h-4 bg-[#1e3a2a] rounded w-1/3 mb-3"></div>
+                <div className="h-6 bg-[#1e3a2a] rounded w-2/3 mb-2"></div>
+                <div className="h-4 bg-[#1e3a2a] rounded w-1/2"></div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -190,6 +219,25 @@ export default function Dashboard({ navigate }) {
               </Card>
             );
           })}
+        </div>
+
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 gap-4">
+          <Card>
+            <h3 className="font-semibold text-white mb-3 text-sm">Profit/Loss by Project</h3>
+            <ProfitChart projects={projects} expenses={expenses} />
+          </Card>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <Card>
+              <h3 className="font-semibold text-white mb-3 text-sm">Quote Status</h3>
+              <StatusChart quotes={quotes} />
+            </Card>
+            <Card>
+              <h3 className="font-semibold text-white mb-3 text-sm">Monthly Trend</h3>
+              <MonthlyTrendChart quotes={quotes} expenses={expenses} />
+            </Card>
+          </div>
         </div>
 
         {/* Recent Quotes Section */}

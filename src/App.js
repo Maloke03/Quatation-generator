@@ -18,6 +18,7 @@ import ProjectView from './pages/ProjectView';
 import Inventory from './pages/Inventory';
 import Workers from './pages/Workers';
 import Attendance from './pages/Attendance';
+import CreateReport from './pages/CreateReport';
 
 
 const MAIN_TABS = ['dashboard', 'clients', 'quotes', 'invoices', 'projects', 'materials', 'inventory', 'workers', 'attendance', 'settings'];
@@ -76,6 +77,7 @@ export default function App() {
       case 'inventory':    return <Inventory navigate={navigate} />;
       case 'workers':      return <Workers navigate={navigate} />;
       case 'attendance':   return <Attendance navigate={navigate} />;
+      case 'create-report': return <CreateReport navigate={navigate} params={params} />;
       case 'settings':     return <Settings navigate={navigate} />;
       default:             return <Dashboard navigate={navigate} />;
     }

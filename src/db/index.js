@@ -1,7 +1,7 @@
 // IndexedDB wrapper using native browser API (no external dependency)
 
 const DB_NAME = 'quotepro_db';
-const DB_VERSION = 6;  // Upgraded to V6
+const DB_VERSION = 7;  // Upgraded to V7
 
 let _db = null;
 let _dbInitPromise = null;
@@ -186,6 +186,16 @@ function initDB() {
             attend.createIndex('month', 'month');
           }
         }
+        
+        // Version 7: Site Reports (V6 was skipped)
+        if (oldVersion < 7) {
+          if (!db.objectStoreNames.contains('siteReports')) {
+            const report = db.createObjectStore('siteReports', { keyPath: 'id' });
+            report.createIndex('projectId', 'projectId');
+            report.createIndex('date', 'date');
+            report.createIndex('createdAt', 'createdAt');
+          }
+        }
       };
     };
     
@@ -293,6 +303,13 @@ function initDB() {
           attend.createIndex('date', 'date');
           attend.createIndex('projectId', 'projectId');
           attend.createIndex('month', 'month');
+        }
+        
+        if (!db.objectStoreNames.contains('siteReports')) {
+          const report = db.createObjectStore('siteReports', { keyPath: 'id' });
+          report.createIndex('projectId', 'projectId');
+          report.createIndex('date', 'date');
+          report.createIndex('createdAt', 'createdAt');
         }
       };
     };
@@ -1412,7 +1429,7 @@ export async function getAllCompanySettings() {
 }
 
 export async function clearAllData() {
-  const stores = ['clients', 'quotes', 'invoices', 'payments', 'materials', 'projects', 'expenses', 'inventory', 'inventoryTransactions', 'workers', 'attendance', 'settings'];
+  const stores = ['clients', 'quotes', 'invoices', 'payments', 'materials', 'projects', 'expenses', 'inventory', 'inventoryTransactions', 'workers', 'attendance', 'siteReports', 'settings'];
   const db = await getDB();
   
   return new Promise((resolve, reject) => {
@@ -1443,5 +1460,89 @@ export async function clearAllData() {
     transaction.onerror = () => {
       if (!hasError) reject(transaction.error);
     };
+  });
+}
+
+// ─── SITE REPORTS (V7) ─────────────────────────────────────────────────────
+
+export async function getAllSiteReports() {
+  const reports = await getAll('siteReports');
+  return reports.sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+export async function getSiteReportsByProject(projectId) {
+  if (!projectId) return [];
+  const reports = await getAll('siteReports');
+  return reports.filter(r => r.projectId === projectId).sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+export async function getSiteReport(id) {
+  if (!id) return null;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('siteReports', 'readonly');
+    const store = transaction.objectStore('siteReports');
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function saveSiteReport(report) {
+  if (!report || !report.projectId) throw new Error('Project ID is required');
+  if (!report.date) throw new Error('Date is required');
+  
+  const now = new Date().toISOString();
+  const db = await getDB();
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('siteReports', 'readwrite');
+    const store = transaction.objectStore('siteReports');
+    
+    if (report.id) {
+      const getRequest = store.get(report.id);
+      getRequest.onsuccess = () => {
+        if (!getRequest.result) {
+          reject(new Error('Report not found'));
+          return;
+        }
+        const updated = { ...getRequest.result, ...report, updatedAt: now };
+        const putRequest = store.put(updated);
+        putRequest.onsuccess = () => {
+          clearCache('siteReports');
+          resolve(updated);
+        };
+        putRequest.onerror = () => reject(putRequest.error);
+      };
+      getRequest.onerror = () => reject(getRequest.error);
+    } else {
+      const newReport = {
+        ...report,
+        id: generateId(),
+        createdAt: now,
+        updatedAt: now,
+        photos: report.photos || []
+      };
+      const putRequest = store.put(newReport);
+      putRequest.onsuccess = () => {
+        clearCache('siteReports');
+        resolve(newReport);
+      };
+      putRequest.onerror = () => reject(putRequest.error);
+    }
+    
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+export async function deleteSiteReport(id) {
+  clearCache('siteReports');
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('siteReports', 'readwrite');
+    const store = transaction.objectStore('siteReports');
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
   });
 }

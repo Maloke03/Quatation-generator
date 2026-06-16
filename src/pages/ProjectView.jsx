@@ -3,16 +3,17 @@ import { useLang } from '../i18n/LangContext';
 import { 
   getProject, getClient, getQuote, 
   getExpensesByProject, saveExpense, deleteExpense,
-  getTotalExpensesByProject, updateProjectStatus 
+  getTotalExpensesByProject, updateProjectStatus,
+  getSiteReportsByProject, deleteSiteReport, getAllWorkers
 } from '../db';
 import { TopBar, Card, Button, Confirm } from '../components/UI';
-import { ChevronLeft, Plus, DollarSign } from 'lucide-react'; // Removed Trash2
-import { shareProjectUpdate } from '../utils/share';
+import { ChevronLeft, Plus, DollarSign, Trash2, FileText } from 'lucide-react';
+import { shareProjectUpdate, shareSiteReport } from '../utils/share';
 import ShareButton from '../components/ShareButton';
 
 export default function ProjectView({ navigate, params }) {
-  // eslint-disable-next-line 
-  const { t } = useLang(); // Keep t - it might be used in translations
+  // eslint-disable-next-line
+  const { t } = useLang();
   const [project, setProject] = useState(null);
   const [client, setClient] = useState(null);
   const [quote, setQuote] = useState(null);
@@ -21,6 +22,10 @@ export default function ProjectView({ navigate, params }) {
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [newExpense, setNewExpense] = useState({ description: '', amount: '', category: 'materials', date: new Date().toISOString().split('T')[0] });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleteReportId, setDeleteReportId] = useState(null);
+  const [reports, setReports] = useState([]);
+  const [workers, setWorkers] = useState([]);
+  const [activeTab, setActiveTab] = useState('overview');
 
   const loadData = useCallback(async () => {
     const p = await getProject(params.projectId);
@@ -35,9 +40,15 @@ export default function ProjectView({ navigate, params }) {
     
     const exp = await getExpensesByProject(p.id);
     setExpenses(exp);
+
+    const rpts = await getSiteReportsByProject(p.id);
+    setReports(rpts);
     
     const total = await getTotalExpensesByProject(p.id);
     setTotalExpenses(total);
+    
+    const w = await getAllWorkers();
+    setWorkers(w);
   }, [params.projectId, navigate]);
 
   useEffect(() => {
@@ -74,6 +85,12 @@ export default function ProjectView({ navigate, params }) {
     await loadData();
   };
 
+  const deleteReportRecord = async (id) => {
+    await deleteSiteReport(id);
+    setDeleteReportId(null);
+    await loadData();
+  };
+
   if (!project) {
     return <div className="p-8 text-center text-gray-400">Loading...</div>;
   }
@@ -81,6 +98,55 @@ export default function ProjectView({ navigate, params }) {
   const quotedAmount = quote?.grandTotal || 0;
   const profit = quotedAmount - totalExpenses;
   const profitMargin = quotedAmount > 0 ? (profit / quotedAmount) * 100 : 0;
+
+  const ReportCard = ({ report }) => {
+    const workerNames = report.workersPresent?.map(id => {
+      const w = workers.find(w => w.id === id);
+      return w?.name || 'Unknown';
+    }).join(', ') || 'None';
+
+    return (
+      <Card className="mb-3">
+        <div className="flex justify-between items-start">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <FileText size={16} className="text-green-400" />
+              <span className="font-semibold text-white">{new Date(report.date).toLocaleDateString()}</span>
+            </div>
+            <p className="text-sm text-gray-300 mt-1 line-clamp-2">{report.workCompleted}</p>
+            {report.materialsUsed?.length > 0 && (
+              <div className="text-xs text-gray-500 mt-1">
+                📦 Materials: {report.materialsUsed.map(m => `${m.name} (${m.quantity} ${m.unit})`).join(', ')}
+              </div>
+            )}
+            {report.workersPresent?.length > 0 && (
+              <div className="text-xs text-gray-500 mt-1">
+                👷 Workers: {workerNames}
+              </div>
+            )}
+            {report.issues && (
+              <div className="text-xs text-red-400 mt-1">⚠️ Issues: {report.issues}</div>
+            )}
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <ShareButton
+              onShare={() => shareSiteReport(report, project, client)}
+              variant="outline"
+              size="sm"
+              label=""
+              showPhoneInput={false}
+            />
+            <button
+              onClick={() => setDeleteReportId(report.id)}
+              className="text-red-400 hover:text-red-300"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        </div>
+      </Card>
+    );
+  };
 
   return (
     <div className="flex flex-col min-h-full pb-24">
@@ -152,84 +218,133 @@ export default function ProjectView({ navigate, params }) {
           </div>
         </Card>
 
-        {/* WhatsApp Share Card */}
-        <div className="bg-[#1a3a2a] border border-green-700 rounded-2xl p-4">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <div className="text-sm font-semibold text-green-300">Share Update</div>
-              <div className="text-xs text-gray-500 mt-0.5">Send project progress to client</div>
-            </div>
-            <ShareButton
-              onShare={(phone) => shareProjectUpdate(project, client, "Project is progressing well. Current status: " + (project.status === 'in_progress' ? 'In Progress' : 'Not Started'), phone)}
-              phoneNumber={client?.phone}
-              variant="primary"
-              size="sm"
-              label="Send Update"
-              showPhoneInput={true}
-            />
-          </div>
-          
-          {/* Quick message input */}
-          <textarea
-            placeholder="Type a custom update message..."
-            className="w-full bg-[#1e3a2a] text-white p-2 rounded-lg border border-[#2d5a3d] focus:outline-none focus:border-green-500 text-sm"
-            rows="2"
-            id="customUpdateMessage"
-          />
+        {/* Tabs */}
+        <div className="flex gap-2 border-b border-[#1e3a2a] pb-2">
           <button
-            onClick={() => {
-              const message = document.getElementById('customUpdateMessage').value;
-              if (message) {
-                shareProjectUpdate(project, client, message, client?.phone);
-              }
-            }}
-            className="w-full mt-2 bg-green-700 hover:bg-green-600 text-white py-2 rounded-lg text-sm"
+            onClick={() => setActiveTab('overview')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'overview' ? 'bg-green-700 text-white' : 'text-gray-400 hover:text-white'
+            }`}
           >
-            Send Custom Update
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'reports' ? 'bg-green-700 text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Reports ({reports.length})
           </button>
         </div>
 
-        {/* Expenses Section */}
-        <div>
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="font-semibold text-white">Expenses</h3>
-            <Button size="sm" onClick={() => setShowAddExpense(true)}>
-              <Plus size={14} /> Add Expense
-            </Button>
-          </div>
-          
-          {expenses.length === 0 ? (
-            <Card>
-              <div className="text-center py-6 text-gray-500">
-                <DollarSign size={32} className="mx-auto mb-2 opacity-50" />
-                <p>No expenses recorded yet</p>
+        {/* Tab Content - Overview */}
+        {activeTab === 'overview' && (
+          <div>
+            {/* Expenses Section */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold text-white">Expenses</h3>
+                <Button size="sm" onClick={() => setShowAddExpense(true)}>
+                  <Plus size={14} /> Add Expense
+                </Button>
               </div>
-            </Card>
-          ) : (
-            expenses.map(expense => (
-              <Card key={expense.id}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-white font-medium">{expense.description}</p>
-                    <div className="flex gap-3 text-xs text-gray-500 mt-1">
-                      <span>{expense.category}</span>
-                      <span>{new Date(expense.date).toLocaleDateString()}</span>
+              
+              {expenses.length === 0 ? (
+                <Card>
+                  <div className="text-center py-6 text-gray-500">
+                    <DollarSign size={32} className="mx-auto mb-2 opacity-50" />
+                    <p>No expenses recorded yet</p>
+                  </div>
+                </Card>
+              ) : (
+                expenses.map(expense => (
+                  <Card key={expense.id}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-white font-medium">{expense.description}</p>
+                        <div className="flex gap-3 text-xs text-gray-500 mt-1">
+                          <span>{expense.category}</span>
+                          <span>{new Date(expense.date).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-red-400 font-semibold">- M {expense.amount.toFixed(2)}</p>
+                        <button 
+                          onClick={() => setDeleteConfirm(expense.id)}
+                          className="text-gray-600 hover:text-red-400 text-xs mt-1"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-red-400 font-semibold">- M {expense.amount.toFixed(2)}</p>
-                    <button 
-                      onClick={() => setDeleteConfirm(expense.id)}
-                      className="text-gray-600 hover:text-red-400 text-xs mt-1"
-                    >
-                      Delete
-                    </button>
-                  </div>
+                  </Card>
+                ))
+              )}
+            </div>
+
+            {/* WhatsApp Share Card */}
+            <div className="bg-[#1a3a2a] border border-green-700 rounded-2xl p-4 mt-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <div className="text-sm font-semibold text-green-300">Share Update</div>
+                  <div className="text-xs text-gray-500 mt-0.5">Send project progress to client</div>
+                </div>
+                <ShareButton
+                  onShare={(phone) => shareProjectUpdate(project, client, "Project is progressing well. Current status: " + (project.status === 'in_progress' ? 'In Progress' : 'Not Started'), phone)}
+                  phoneNumber={client?.phone}
+                  variant="primary"
+                  size="sm"
+                  label="Send Update"
+                  showPhoneInput={true}
+                />
+              </div>
+              
+              {/* Quick message input */}
+              <textarea
+                placeholder="Type a custom update message..."
+                className="w-full bg-[#1e3a2a] text-white p-2 rounded-lg border border-[#2d5a3d] focus:outline-none focus:border-green-500 text-sm"
+                rows="2"
+                id="customUpdateMessage"
+              />
+              <button
+                onClick={() => {
+                  const message = document.getElementById('customUpdateMessage').value;
+                  if (message) {
+                    shareProjectUpdate(project, client, message, client?.phone);
+                  }
+                }}
+                className="w-full mt-2 bg-green-700 hover:bg-green-600 text-white py-2 rounded-lg text-sm"
+              >
+                Send Custom Update
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab Content - Reports */}
+        {activeTab === 'reports' && (
+          <div>
+            <div className="flex justify-between items-center mb-3">
+              <span className="text-sm text-gray-400">All Site Reports</span>
+              <Button size="sm" onClick={() => navigate('create-report', { projectId: project.id })}>
+                <Plus size={14} className="mr-1" /> New Report
+              </Button>
+            </div>
+            
+            {reports.length === 0 ? (
+              <Card>
+                <div className="text-center py-6 text-gray-500">
+                  <FileText size={32} className="mx-auto mb-2 opacity-50" />
+                  <p>No site reports yet</p>
+                  <p className="text-sm mt-1">Create your first daily report</p>
                 </div>
               </Card>
-            ))
-          )}
-        </div>
+            ) : (
+              reports.map(report => <ReportCard key={report.id} report={report} />)
+            )}
+          </div>
+        )}
       </div>
 
       {/* Add Expense Modal */}
@@ -278,12 +393,20 @@ export default function ProjectView({ navigate, params }) {
         </div>
       )}
 
-      {/* Delete Confirm */}
+      {/* Delete Expense Confirm */}
       <Confirm
         open={!!deleteConfirm}
         message="Delete this expense?"
         onConfirm={() => deleteExpenseRecord(deleteConfirm)}
         onCancel={() => setDeleteConfirm(null)}
+      />
+
+      {/* Delete Report Confirm */}
+      <Confirm
+        open={!!deleteReportId}
+        message="Delete this site report?"
+        onConfirm={() => deleteReportRecord(deleteReportId)}
+        onCancel={() => setDeleteReportId(null)}
       />
     </div>
   );
