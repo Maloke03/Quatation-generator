@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { LangProvider } from './i18n/LangContext';
+import { UserProvider } from './context/UserContext';
+import SubscriptionGuard from './components/SubscriptionGuard';
 import Dashboard from './pages/Dashboard';
 import Clients from './pages/Clients';
 import Quotes from './pages/Quotes';
@@ -19,7 +21,8 @@ import Inventory from './pages/Inventory';
 import Workers from './pages/Workers';
 import Attendance from './pages/Attendance';
 import CreateReport from './pages/CreateReport';
-
+import AdminDashboard from './pages/AdminDashboard';
+import Subscribe from './pages/Subscribe';
 
 const MAIN_TABS = ['dashboard', 'clients', 'quotes', 'invoices', 'projects', 'materials', 'inventory', 'workers', 'attendance', 'settings'];
 
@@ -45,6 +48,10 @@ export default function App() {
         setRoute({ page: 'settings', params: {} });
       } else if (cleanPath === '/attendance') {
         setRoute({ page: 'attendance', params: {} });
+      } else if (cleanPath === '/admin') {
+        setRoute({ page: 'admin', params: {} });
+      } else if (cleanPath === '/subscribe') {
+        setRoute({ page: 'subscribe', params: {} });
       }
     }
   }, []);
@@ -57,6 +64,8 @@ export default function App() {
   const { page, params } = route;
   const currentTab = MAIN_TABS.includes(page) ? page : null;
   const isPrint = page === 'quote-print' || page === 'invoice-print';
+  const isAdmin = page === 'admin';
+  const isSubscribe = page === 'subscribe';
 
   function renderPage() {
     switch (page) {
@@ -78,21 +87,43 @@ export default function App() {
       case 'workers':      return <Workers navigate={navigate} />;
       case 'attendance':   return <Attendance navigate={navigate} />;
       case 'create-report': return <CreateReport navigate={navigate} params={params} />;
+      case 'admin':        return <AdminDashboard navigate={navigate} />;
+      case 'subscribe':    return <Subscribe navigate={navigate} />;
       case 'settings':     return <Settings navigate={navigate} />;
       default:             return <Dashboard navigate={navigate} />;
     }
   }
 
+  // Check if we should show subscription guard (not on subscribe page)
+  const showGuard = page !== 'subscribe';
+
   return (
     <LangProvider>
-      <div className="min-h-screen bg-[#0a1810] text-white">
-        <div className="max-w-lg mx-auto relative min-h-screen">
-          {renderPage()}
-          {!isPrint && (
-            <BottomNav current={currentTab} navigate={navigate} />
-          )}
-        </div>
-      </div>
+      <UserProvider>
+        {showGuard ? (
+          <SubscriptionGuard>
+            <div className="min-h-screen bg-[#0a1810] text-white">
+              <div className="max-w-lg mx-auto relative min-h-screen">
+                {renderPage()}
+                {!isPrint && !isAdmin && !isSubscribe && (
+                  <BottomNav current={currentTab} navigate={navigate} />
+                )}
+                {isAdmin && (
+                  <div className="text-center text-xs text-gray-600 py-4 border-t border-[#1e3a2a]">
+                    Admin Mode - Bottom Nav Hidden
+                  </div>
+                )}
+              </div>
+            </div>
+          </SubscriptionGuard>
+        ) : (
+          <div className="min-h-screen bg-[#0a1810] text-white">
+            <div className="max-w-lg mx-auto relative min-h-screen">
+              {renderPage()}
+            </div>
+          </div>
+        )}
+      </UserProvider>
     </LangProvider>
   );
 }
