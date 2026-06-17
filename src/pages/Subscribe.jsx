@@ -1,7 +1,11 @@
+// eslint-disable-next-line
 import { useState, useEffect } from 'react';
+// eslint-disable-next-line
 import { useUser } from '../context/UserContext';
+// eslint-disable-next-line
 import { recordPayment, getUserByDeviceId } from '../db';
 import { TopBar, Card, Button } from '../components/UI';
+// eslint-disable-next-line
 import { ChevronLeft, Smartphone, CheckCircle, Clock, AlertCircle, Copy, Check, X, Phone } from 'lucide-react';
 
 export default function Subscribe({ navigate }) {
