@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 import { 
-  getAllUsers, getUserStats, extendTrial, getAllSubscriptionPayments, 
-  verifyPayment, rejectPayment, saveUser, deletePaymentRecord, clearAllPaymentRecords
+  getAllUsers, 
+  getUserStats, 
+  extendTrial, 
+  getAllSubscriptionPayments, 
+  verifyPayment, 
+  rejectPayment, 
+  saveUser, 
+  deletePaymentRecord, 
+  clearAllPaymentRecords 
 } from '../db';
 import { TopBar, Card, Button } from '../components/UI';
 import { 
@@ -80,7 +87,7 @@ export default function AdminDashboard({ navigate }) {
       if (user) {
         const newTrialEnd = new Date();
         newTrialEnd.setDate(newTrialEnd.getDate() + 30);
-        user.trialEnds = newTrialEnd.toISOString();
+        user.trial_ends = newTrialEnd.toISOString();
         await saveUser(user);
         await loadData();
         alert('✅ Trial reset to 30 days!');
@@ -91,12 +98,12 @@ export default function AdminDashboard({ navigate }) {
   const handleEditUser = (user) => {
     setEditingUser(user);
     setEditForm({
-      deviceId: user.deviceId || '',
-      hasPaid: user.hasPaid || false,
-      isActive: user.isActive !== false,
-      isAdmin: user.isAdmin || false,
-      trialEnds: user.trialEnds ? new Date(user.trialEnds).toISOString().split('T')[0] : '',
-      subscriptionStatus: user.subscriptionStatus || 'trial'
+      deviceId: user.device_id || '',
+      hasPaid: user.has_paid || false,
+      isActive: user.is_active !== false,
+      isAdmin: user.is_admin || false,
+      trialEnds: user.trial_ends ? new Date(user.trial_ends).toISOString().split('T')[0] : '',
+      subscriptionStatus: user.subscription_status || 'trial'
     });
   };
 
@@ -105,13 +112,13 @@ export default function AdminDashboard({ navigate }) {
     
     const user = users.find(u => u.id === editingUser.id);
     if (user) {
-      user.hasPaid = editForm.hasPaid;
-      user.isActive = editForm.isActive;
-      user.isAdmin = editForm.isAdmin;
-      user.subscriptionStatus = editForm.subscriptionStatus;
+      user.has_paid = editForm.hasPaid;
+      user.is_active = editForm.isActive;
+      user.is_admin = editForm.isAdmin;
+      user.subscription_status = editForm.subscriptionStatus;
       
       if (editForm.trialEnds) {
-        user.trialEnds = new Date(editForm.trialEnds).toISOString();
+        user.trial_ends = new Date(editForm.trialEnds).toISOString();
       }
       
       await saveUser(user);
@@ -254,7 +261,7 @@ export default function AdminDashboard({ navigate }) {
                   variant="secondary"
                   onClick={() => {
                     if (window.confirm('Extend ALL active trials by 30 days?')) {
-                      const trialUsers = users.filter(u => !u.hasPaid && u.isActive);
+                      const trialUsers = users.filter(u => !u.has_paid && u.is_active);
                       trialUsers.forEach(async (u) => {
                         await extendTrial(u.id, 30);
                       });
@@ -319,7 +326,7 @@ export default function AdminDashboard({ navigate }) {
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {payments.map(payment => {
-                  const user = users.find(u => u.id === payment.userId);
+                  const user = users.find(u => u.id === payment.user_id);
                   const isPending = payment.status === 'pending';
                   const isCompleted = payment.status === 'completed';
                   
@@ -338,14 +345,14 @@ export default function AdminDashboard({ navigate }) {
                             <span className="text-white font-medium">M{payment.amount.toFixed(2)}</span>
                           </div>
                           <div className="text-xs text-gray-400 mt-1">
-                            {payment.method} • {new Date(payment.createdAt).toLocaleDateString()}
+                            {payment.method} • {new Date(payment.created_at).toLocaleDateString()}
                           </div>
                           <div className="text-xs text-gray-400">
                             Ref: {payment.reference || 'N/A'}
                           </div>
                           {user && (
                             <div className="text-xs text-gray-500 mt-1">
-                              User: {user.deviceId?.substring(0, 15)}...
+                              User: {user.device_id?.substring(0, 15)}...
                             </div>
                           )}
                         </div>
@@ -395,8 +402,8 @@ export default function AdminDashboard({ navigate }) {
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {users.map(user => {
                   const now = new Date();
-                  const trialEnds = new Date(user.trialEnds);
-                  const isExpired = trialEnds < now && !user.hasPaid;
+                  const trialEnds = new Date(user.trial_ends);
+                  const isExpired = trialEnds < now && !user.has_paid;
                   const daysLeft = Math.ceil((trialEnds - now) / (1000 * 60 * 60 * 24));
                   
                   return (
@@ -405,23 +412,23 @@ export default function AdminDashboard({ navigate }) {
                         <div className="flex justify-between items-start">
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-white text-sm truncate">
-                              {user.deviceId?.substring(0, 25)}...
+                              {user.device_id?.substring(0, 25)}...
                             </div>
                             <div className="text-xs text-gray-400 mt-0.5">
-                              First: {new Date(user.firstSeen).toLocaleDateString()}
+                              First: {new Date(user.created_at).toLocaleDateString()}
                             </div>
                             <div className="text-xs text-gray-400">
-                              Last: {new Date(user.lastSeen).toLocaleDateString()}
+                              Last: {new Date(user.last_seen).toLocaleDateString()}
                             </div>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                               <span className={`text-xs px-2 py-0.5 rounded ${
-                                user.hasPaid ? 'bg-green-900 text-green-300' :
+                                user.has_paid ? 'bg-green-900 text-green-300' :
                                 isExpired ? 'bg-red-900 text-red-300' :
                                 'bg-yellow-900 text-yellow-300'
                               }`}>
-                                {user.hasPaid ? '✅ Paid' : isExpired ? '⚠️ Expired' : `Trial: ${daysLeft}d`}
+                                {user.has_paid ? '✅ Paid' : isExpired ? '⚠️ Expired' : `Trial: ${daysLeft}d`}
                               </span>
-                              {user.isAdmin && (
+                              {user.is_admin && (
                                 <span className="text-xs px-2 py-0.5 rounded bg-amber-900 text-amber-300">
                                   👑 Admin
                                 </span>
@@ -463,7 +470,7 @@ export default function AdminDashboard({ navigate }) {
                           >
                             <Plus size={12} className="mr-1" /> +90 Days
                           </Button>
-                          {!user.hasPaid && (
+                          {!user.has_paid && (
                             <Button
                               size="sm"
                               variant="secondary"
