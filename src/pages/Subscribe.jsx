@@ -6,7 +6,7 @@ import { useUser } from '../context/UserContext';
 import { recordPayment, getUserByDeviceId } from '../db';
 import { TopBar, Card, Button } from '../components/UI';
 // eslint-disable-next-line
-import { ChevronLeft, Smartphone, CheckCircle, Clock, AlertCircle, Copy, Check, X, Phone } from 'lucide-react';
+import { ChevronLeft, Smartphone, CheckCircle, Clock, AlertCircle, Copy, Check, X, Phone, LogIn } from 'lucide-react';
 
 export default function Subscribe({ navigate }) {
   const { user, refreshAccess, refreshUser } = useUser();
@@ -134,6 +134,19 @@ export default function Subscribe({ navigate }) {
             Return to Dashboard
           </Button>
         </Card>
+        {/* Login Link - For users who already have an account */}
+        <div className="text-center mt-6 pt-4 border-t border-[#1e3a2a]">
+          <p className="text-gray-500 text-sm">
+            Already have an account?
+          </p>
+          <button
+            onClick={() => navigate('login')}
+            className="text-green-400 hover:text-green-300 font-medium mt-1 flex items-center justify-center gap-2"
+          >
+            <LogIn size={16} />
+            Sign In Here
+          </button>
+        </div>
       </div>
     );
   }
@@ -301,6 +314,20 @@ export default function Subscribe({ navigate }) {
             </div>
           </>
         )}
+
+        {/* Login Link - For users who already have an account */}
+        <div className="text-center mt-6 pt-4 border-t border-[#1e3a2a]">
+          <p className="text-gray-500 text-sm">
+            Already have an account?
+          </p>
+          <button
+            onClick={() => navigate('login')}
+            className="text-green-400 hover:text-green-300 font-medium mt-1 flex items-center justify-center gap-2"
+          >
+            <LogIn size={16} />
+            Sign In Here
+          </button>
+        </div>
       </div>
     </div>
   );

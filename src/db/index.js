@@ -1624,26 +1624,33 @@ export async function getUser(id) {
 }
 
 // Get or create user in Supabase
-export async function getOrCreateUser(deviceId, deviceInfo = {}) {
+export async function getOrCreateUser(userId, email, deviceInfo = {}) {
   try {
-    // First try to get existing user
-    const existing = await getUserByDeviceId(deviceId);
+    // Check if user already exists
+    const { data: existing, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error && !error.message.includes('not found')) throw error;
+
     if (existing) {
-      // Update last_seen
       await supabase
         .from('users')
         .update({ last_seen: new Date().toISOString() })
-        .eq('device_id', deviceId);
+        .eq('id', userId);
       return existing;
     }
-    
+
     // Create new user
     const trialEnds = new Date();
     trialEnds.setDate(trialEnds.getDate() + 30);
-    
+
     const newUser = {
-      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-      device_id: deviceId,
+      id: userId,
+      device_id: userId,
+      email: email,
       device_info: deviceInfo,
       trial_ends: trialEnds.toISOString(),
       is_active: true,
@@ -1651,69 +1658,43 @@ export async function getOrCreateUser(deviceId, deviceInfo = {}) {
       is_admin: false,
       subscription_status: 'trial'
     };
-    
-    const { data, error } = await supabase
+
+    const { data, error: insertError } = await supabase
       .from('users')
       .insert(newUser)
       .select()
       .single();
-    
-    if (error) throw error;
+
+    if (insertError) throw insertError;
     return data;
   } catch (error) {
     console.error('Error in getOrCreateUser:', error);
     // Fallback to local storage
-    return await getOrCreateUserLocal(deviceId, deviceInfo);
+    return await getOrCreateUserLocal(userId, email, deviceInfo);
   }
 }
 
-// ─── LOCAL STORAGE FALLBACK ──────────────────────────────────────────────
-
-async function getOrCreateUserLocal(deviceId, deviceInfo = {}) {
-  let user = await getUserByDeviceIdLocal(deviceId);
+// Local fallback for getOrCreateUser
+async function getOrCreateUserLocal(userId, email, deviceInfo = {}) {
+  const trialEnds = new Date();
+  trialEnds.setDate(trialEnds.getDate() + 30);
   
-  if (!user) {
-    const now = new Date().toISOString();
-    const trialEnds = new Date();
-    trialEnds.setDate(trialEnds.getDate() + 30);
-    
-    user = {
-      id: 'local_' + Date.now(),
-      deviceId: deviceId,
-      deviceInfo: deviceInfo,
-      firstSeen: now,
-      lastSeen: now,
-      trialEnds: trialEnds.toISOString(),
-      isActive: true,
-      hasPaid: false,
-      subscriptionStatus: 'trial',
-      createdAt: now,
-      updatedAt: now
-    };
-    
-    localStorage.setItem('app_user', JSON.stringify(user));
-  } else {
-    user.lastSeen = new Date().toISOString();
-    localStorage.setItem('app_user', JSON.stringify(user));
-  }
+  const user = {
+    id: userId,
+    device_id: userId,
+    email: email,
+    deviceInfo: deviceInfo,
+    trialEnds: trialEnds.toISOString(),
+    isActive: true,
+    hasPaid: false,
+    isAdmin: false,
+    subscriptionStatus: 'trial',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
   
+  localStorage.setItem('app_user', JSON.stringify(user));
   return user;
-}
-
-async function getUserByDeviceIdLocal(deviceId) {
-  try {
-    const userData = localStorage.getItem('app_user');
-    if (userData) {
-      const user = JSON.parse(userData);
-      if (user.deviceId === deviceId) {
-        return user;
-      }
-    }
-    return null;
-  } catch (error) {
-    console.error('Error getting local user:', error);
-    return null;
-  }
 }
 
 // ─── USER MANAGEMENT (Supabase) ─────────────────────────────────────────
@@ -2047,4 +2028,73 @@ export async function getUserPaymentHistory(userId) {
     console.error('Error getting user payment history:', error);
     return [];
   }
+}
+
+// Track device fingerprint to prevent multiple accounts
+export async function getDeviceFingerprint() {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.textBaseline = 'top';
+  ctx.font = '14px Arial';
+  ctx.fillStyle = '#f60';
+  ctx.fillRect(125, 1, 62, 20);
+  ctx.fillStyle = '#069';
+  ctx.fillText('QuotePro', 2, 15);
+  ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+  ctx.fillText('Device', 4, 17);
+  
+  const fingerprint = canvas.toDataURL();
+  
+  // Also get browser info
+  const browserInfo = {
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    language: navigator.language,
+    screen: `${window.screen.width}x${window.screen.height}`,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    canvas: fingerprint
+  };
+  
+  return btoa(JSON.stringify(browserInfo));
+}
+
+export async function checkExistingUser(email) {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, device_id, has_paid, trial_ends, subscription_status')
+      .eq('email', email)
+      .maybeSingle();
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error checking user:', error);
+    return null;
+  }
+}
+
+export async function blockDuplicateSignup(email, deviceFingerprint) {
+  // Check if this email already exists
+  const existing = await checkExistingUser(email);
+  if (existing) {
+    return { blocked: true, message: 'This email already has an account. Please sign in.' };
+  }
+  
+  // Check if this device has already signed up with a different email
+  const { data: deviceUsers, error } = await supabase
+    .from('users')
+    .select('email, device_id')
+    .eq('device_id', deviceFingerprint);
+  
+  if (error) throw error;
+  
+  if (deviceUsers && deviceUsers.length > 0) {
+    return { 
+      blocked: true, 
+      message: 'This device already has an account. Please sign in.' 
+    };
+  }
+  
+  return { blocked: false };
 }

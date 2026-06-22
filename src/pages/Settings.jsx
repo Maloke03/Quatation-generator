@@ -5,7 +5,7 @@ import { useLang } from '../i18n/LangContext';
 import { getSetting, setSetting, getOrCreateUser, getUserByDeviceId } from '../db';
 import { Input, Button, TopBar, Card } from '../components/UI';
 // eslint-disable-next-line
-import { Check, Package, Users, Database, Calculator, Shield, Lock, Key } from 'lucide-react';
+import { Check, Package, Users, Database, Calculator, Shield, Lock, Key, LogOut } from 'lucide-react';
 
 export default function Settings({ navigate }) {
   const { t, lang, setLang } = useLang();
@@ -120,6 +120,25 @@ export default function Settings({ navigate }) {
       }
     }
   };
+
+// Sign Out function - updated to go to landing page
+const handleSignOut = async () => {
+  if (window.confirm('Are you sure you want to sign out?')) {
+    try {
+      const { supabase } = await import('../lib/supabase');
+      await supabase.auth.signOut();
+      
+      // Clear ALL local storage
+      localStorage.clear();
+      
+      // Force redirect to landing page
+      window.location.replace('/');
+    } catch (error) {
+      console.error('Sign out error:', error);
+      alert('Error signing out. Please try again.');
+    }
+  }
+};
 
   return (
     <div className="flex flex-col min-h-full">
@@ -273,6 +292,36 @@ export default function Settings({ navigate }) {
             </Button>
           </div>
         </div>
+
+        {/* Sign Out Button */}
+        <div className="mt-2">
+          <Button 
+            onClick={handleSignOut}
+            className="w-full bg-red-900/50 hover:bg-red-800/50 text-red-300 border border-red-700/50 hover:border-red-600 transition-colors"
+          >
+            <LogOut size={18} className="mr-2" />
+            Sign Out
+          </Button>
+          <p className="text-xs text-gray-500 text-center mt-2">
+            Sign out of your account to switch users
+          </p>
+        </div>
+
+        {/* App info */}
+        <Card>
+          <div className="text-center py-2">
+            <div className="text-green-400 font-bold text-lg flex items-center justify-center gap-2">
+              <span>{t.appName}</span>
+              <span className="text-xs bg-green-900 px-2 py-0.5 rounded-full">v8.0</span>
+            </div>
+            <div className="text-gray-500 text-xs mt-1">Offline-first PWA · Data on device</div>
+            <div className="text-gray-600 text-xs mt-2 flex items-center justify-center gap-3">
+              <span className="flex items-center gap-1"><Package size={10} /> Price DB</span>
+              <span className="flex items-center gap-1"><Calculator size={10} /> Labour Calc</span>
+              <span className="flex items-center gap-1"><Users size={10} /> Clients</span>
+            </div>
+          </div>
+        </Card>
       </div>
 
       {/* Password Dialog - Layer 2 */}

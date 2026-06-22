@@ -1,98 +1,131 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-// eslint-disable-next-line
-import { getOrCreateUser, getUserByDeviceId, createUserInSupabase } from '../db';
+import { supabase } from '../lib/supabase';
+import { getOrCreateUser, checkUserAccess } from '../db';
 
 const UserContext = createContext();
 
-export function UserProvider({ children }) {
+export function UserProvider({ children, navigate }) {
   const [user, setUser] = useState(null);
   const [access, setAccess] = useState({ allowed: true, status: 'loading' });
   const [loading, setLoading] = useState(true);
-  const [deviceId, setDeviceId] = useState(null);
+  const [session, setSession] = useState(null);
 
-  // Generate or get device ID
   useEffect(() => {
-    let id = localStorage.getItem('app_device_id');
-    if (!id) {
-      id = 'device_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      localStorage.setItem('app_device_id', id);
-    }
-    setDeviceId(id);
-  }, []);
-
-  // Load user data
-  useEffect(() => {
-    if (!deviceId) return;
-
-    const loadUser = async () => {
-      try {
-        console.log('Loading user for device:', deviceId);
-        
-        // Try to get or create user
-        const userData = await getOrCreateUser(deviceId, {
-          userAgent: navigator.userAgent,
-          platform: navigator.platform,
-          language: navigator.language,
-          screen: `${window.screen.width}x${window.screen.height}`,
-          timestamp: new Date().toISOString()
-        });
-        
-        console.log('User data loaded:', userData);
-        setUser(userData);
-
-        // Check access
-        const now = new Date();
-        const trialEnds = new Date(userData.trial_ends || userData.trialEnds);
-        
-        if (userData.has_paid || userData.hasPaid) {
-          setAccess({ allowed: true, user: userData, status: 'paid' });
-        } else if (trialEnds > now && (userData.is_active !== false && userData.isActive !== false)) {
-          const daysLeft = Math.ceil((trialEnds - now) / (1000 * 60 * 60 * 24));
-          setAccess({ allowed: true, user: userData, status: 'trial', daysLeft });
-        } else {
-          setAccess({ allowed: false, user: userData, status: 'expired' });
-        }
-      } catch (error) {
-        console.error('Error loading user:', error);
-        setAccess({ allowed: true, status: 'error' });
-      } finally {
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        loadUser(session.user.id);
+      } else {
         setLoading(false);
       }
-    };
+    });
 
-    loadUser();
-  }, [deviceId]);
+  // In UserContext.jsx, update the auth listener
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    console.log('Auth event:', event);
+    setSession(session);
+    
+    if (session) {
+      loadUser(session.user.id);
+    } else {
+      setUser(null);
+      setAccess({ allowed: false, status: 'logged_out' });
+      setLoading(false);
+      
+      // Only redirect if not on a public page
+      const currentPath = window.location.pathname;
+      const isPublicPage = currentPath === '/' || 
+                          currentPath.includes('/landing') || 
+                          currentPath.includes('/login') || 
+                          currentPath.includes('/subscribe');
+      
+      if (!isPublicPage) {
+        window.location.replace('/');
+      }
+    }
+  });
 
-  const refreshAccess = async () => {
-    if (!deviceId) return;
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const loadUser = async (userId) => {
     try {
-      const userData = await getUserByDeviceId(deviceId);
-      if (userData) {
-        setUser(userData);
-        const now = new Date();
-        const trialEnds = new Date(userData.trial_ends || userData.trialEnds);
+      // Get user from our users table
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        setUser(data);
+        const accessData = await checkUserAccess(data.id);
+        setAccess(accessData);
+      } else {
+        // User doesn't exist in users table - create them
+        const trialEnds = new Date();
+        trialEnds.setDate(trialEnds.getDate() + 30);
         
-        if (userData.has_paid || userData.hasPaid) {
-          setAccess({ allowed: true, user: userData, status: 'paid' });
-        } else if (trialEnds > now && (userData.is_active !== false && userData.isActive !== false)) {
-          const daysLeft = Math.ceil((trialEnds - now) / (1000 * 60 * 60 * 24));
-          setAccess({ allowed: true, user: userData, status: 'trial', daysLeft });
-        } else {
-          setAccess({ allowed: false, user: userData, status: 'expired' });
-        }
+        const newUser = {
+          id: userId,
+          device_id: userId,
+          email: session?.user?.email || '',
+          trial_ends: trialEnds.toISOString(),
+          is_active: true,
+          has_paid: false,
+          is_admin: false,
+          subscription_status: 'trial'
+        };
+        
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert(newUser);
+        
+        if (insertError) throw insertError;
+        
+        setUser(newUser);
+        setAccess({ allowed: true, user: newUser, status: 'trial', daysLeft: 30 });
       }
     } catch (error) {
-      console.error('Error refreshing access:', error);
+      console.error('Error loading user:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const refreshAccess = async () => {
+    if (!user) return;
+    const accessData = await checkUserAccess(user.id);
+    setAccess(accessData);
+  };
+
   const refreshUser = async () => {
-    if (!deviceId) return;
+    if (!user) return;
+    loadUser(user.id);
+  };
+
+  const logout = async () => {
     try {
-      const userData = await getUserByDeviceId(deviceId);
-      if (userData) setUser(userData);
+      await supabase.auth.signOut();
+      setUser(null);
+      setAccess({ allowed: false, status: 'logged_out' });
+      
+      // Clear local storage
+      localStorage.clear();
+      
+      // Navigate to login
+      if (navigate) {
+        navigate('login');
+      } else {
+        window.location.replace('/login');
+      }
     } catch (error) {
-      console.error('Error refreshing user:', error);
+      console.error('Logout error:', error);
+      // Force redirect even if error
+      window.location.replace('/login');
     }
   };
 
@@ -101,9 +134,10 @@ export function UserProvider({ children }) {
       user,
       access,
       loading,
-      deviceId,
+      session,
       refreshAccess,
-      refreshUser
+      refreshUser,
+      logout
     }}>
       {children}
     </UserContext.Provider>

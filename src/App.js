@@ -23,11 +23,13 @@ import Attendance from './pages/Attendance';
 import CreateReport from './pages/CreateReport';
 import AdminDashboard from './pages/AdminDashboard';
 import Subscribe from './pages/Subscribe';
+import Login from './pages/Login';
+import Landing from './pages/Landing';
 
 const MAIN_TABS = ['dashboard', 'clients', 'quotes', 'invoices', 'projects', 'materials', 'inventory', 'workers', 'attendance', 'settings'];
 
 export default function App() {
-  const [route, setRoute] = useState({ page: 'dashboard', params: {} });
+  const [route, setRoute] = useState({ page: 'landing', params: {} });
 
   // Handle initial URL on load (for deep linking)
   useEffect(() => {
@@ -52,7 +54,14 @@ export default function App() {
         setRoute({ page: 'admin', params: {} });
       } else if (cleanPath === '/subscribe') {
         setRoute({ page: 'subscribe', params: {} });
+      } else if (cleanPath === '/login') {
+        setRoute({ page: 'login', params: {} });
+      } else if (cleanPath === '/landing' || cleanPath === '') {
+        setRoute({ page: 'landing', params: {} });
       }
+    } else {
+      // Root path - show landing page
+      setRoute({ page: 'landing', params: {} });
     }
   }, []);
 
@@ -66,9 +75,13 @@ export default function App() {
   const isPrint = page === 'quote-print' || page === 'invoice-print';
   const isAdmin = page === 'admin';
   const isSubscribe = page === 'subscribe';
+  const isLogin = page === 'login';
+  const isLanding = page === 'landing';
 
   function renderPage() {
     switch (page) {
+      case 'landing':      return <Landing navigate={navigate} />;
+      case 'login':        return <Login navigate={navigate} />;
       case 'dashboard':    return <Dashboard navigate={navigate} />;
       case 'clients':      return <Clients navigate={navigate} />;
       case 'quotes':       return <Quotes navigate={navigate} />;
@@ -90,22 +103,22 @@ export default function App() {
       case 'admin':        return <AdminDashboard navigate={navigate} />;
       case 'subscribe':    return <Subscribe navigate={navigate} />;
       case 'settings':     return <Settings navigate={navigate} />;
-      default:             return <Dashboard navigate={navigate} />;
+      default:             return <Landing navigate={navigate} />;
     }
   }
 
-  // Check if we should show subscription guard (not on subscribe page)
-  const showGuard = page !== 'subscribe';
+  // Check if we should show subscription guard (not on subscribe, login, or landing page)
+  const showGuard = page !== 'subscribe' && page !== 'login' && page !== 'landing';
 
   return (
     <LangProvider>
-      <UserProvider>
+      <UserProvider navigate={navigate}>
         {showGuard ? (
           <SubscriptionGuard>
             <div className="min-h-screen bg-[#0a1810] text-white">
               <div className="max-w-lg mx-auto relative min-h-screen">
                 {renderPage()}
-                {!isPrint && !isAdmin && !isSubscribe && (
+                {!isPrint && !isAdmin && !isSubscribe && !isLogin && !isLanding && (
                   <BottomNav current={currentTab} navigate={navigate} />
                 )}
                 {isAdmin && (
