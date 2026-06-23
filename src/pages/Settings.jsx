@@ -6,6 +6,8 @@ import { getSetting, setSetting, getOrCreateUser, getUserByDeviceId } from '../d
 import { Input, Button, TopBar, Card } from '../components/UI';
 // eslint-disable-next-line
 import { Check, Package, Users, Database, Calculator, Shield, Lock, Key, LogOut } from 'lucide-react';
+import { HelpCircle, ChevronRight  } from 'lucide-react';
+
 
 export default function Settings({ navigate }) {
   const { t, lang, setLang } = useLang();
@@ -248,6 +250,22 @@ const handleSignOut = async () => {
               </div>
             </button>
           </div>
+        </div>
+
+        <div>
+          <button
+            onClick={() => navigate('help')}
+            className="w-full bg-[#1e3a2a] border border-[#2d5a3d] rounded-xl p-4 hover:border-green-700 transition-all cursor-pointer flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <HelpCircle size={24} className="text-green-400" />
+              <div className="text-left">
+                <span className="text-sm font-medium text-white">Help & Guide</span>
+                <p className="text-xs text-gray-400">Learn how to use QuotePro</p>
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-gray-400" />
+          </button>
         </div>
 
         {/* Company details */}

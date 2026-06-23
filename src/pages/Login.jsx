@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 // eslint-disable-next-line
 import { TopBar, Card, Button } from '../components/UI';
 // eslint-disable-next-line
-import { Mail, Lock, User, ArrowLeft, KeyRound, CheckCircle } from 'lucide-react';
+import { Mail, Lock, User, ArrowLeft, KeyRound, CheckCircle, AlertCircle, LogIn } from 'lucide-react';
 
 export default function Login({ navigate }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -14,7 +14,10 @@ export default function Login({ navigate }) {
   const [checkingSession, setCheckingSession] = useState(true);
   const [isResetPassword, setIsResetPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
+  // eslint-disable-next-line
   const [resetSent, setResetSent] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   // Check if user is already signed in
   useEffect(() => {
@@ -129,31 +132,57 @@ export default function Login({ navigate }) {
     }
   };
 
-  const handleResetPassword = async () => {
-    if (!resetEmail) {
-      setError('Please enter your email address.');
-      return;
-    }
+const handleResetPassword = async (e) => {
+  e.preventDefault();
+  
+  if (!resetEmail) {
+    setResetError('Please enter your email address.');
+    return;
+  }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(resetEmail)) {
+    setResetError('Please enter a valid email address.');
+    return;
+  }
+
+  setLoading(true);
+  setResetError('');
+  setResetSuccess(false);
+  
+  try {
+    // Get the app URL - use Vercel URL if available
+    const appUrl = process.env.REACT_APP_APP_URL || 'https://quatation-generator.vercel.app';
     
-    setLoading(true);
-    setError('');
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: window.location.origin + '/reset-password',
-      });
-      if (error) throw error;
-      setResetSent(true);
-      setTimeout(() => {
-        setIsResetPassword(false);
-        setResetSent(false);
-        setResetEmail('');
-      }, 5000);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    console.log('Sending reset email with redirect to:', `${appUrl}/reset-password`);
+    
+    // Send password reset email
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: `${appUrl}/reset-password`,
+    });
+    
+    if (error) throw error;
+    
+    // Success
+    setResetSuccess(true);
+    setResetSent(true);
+    
+    // Clear form after 4 seconds
+    setTimeout(() => {
+      setIsResetPassword(false);
+      setResetSent(false);
+      setResetSuccess(false);
+      setResetEmail('');
+    }, 4000);
+    
+  } catch (err) {
+    console.error('Reset error:', err);
+    setResetError(err.message || 'Failed to send reset email. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   // If reset password is active, show reset form
   if (isResetPassword) {
@@ -173,21 +202,29 @@ export default function Login({ navigate }) {
               </p>
             </div>
 
-            {resetSent ? (
+            {resetSuccess ? (
               <div className="text-center">
                 <div className="bg-green-900/30 border border-green-700 rounded-lg p-4 mb-4">
                   <CheckCircle size={32} className="text-green-400 mx-auto mb-2" />
-                  <p className="text-green-300 text-sm font-medium">✅ Password reset email sent!</p>
-                  <p className="text-gray-400 text-xs mt-1">Check your inbox for the link.</p>
+                  <p className="text-green-300 text-sm font-medium">✅ Password Reset Email Sent!</p>
+                  <p className="text-gray-400 text-xs mt-1">
+                    We've sent a password reset link to <span className="text-white font-medium">{resetEmail}</span>
+                  </p>
+                  <p className="text-gray-500 text-xs mt-2">
+                    Please check your inbox and spam folder.
+                  </p>
                 </div>
                 <Button 
                   onClick={() => {
                     setIsResetPassword(false);
                     setResetSent(false);
+                    setResetSuccess(false);
                     setResetEmail('');
+                    setResetError('');
                   }}
                   className="w-full"
                 >
+                  <LogIn size={16} className="mr-2" />
                   Back to Sign In
                 </Button>
               </div>
@@ -208,9 +245,10 @@ export default function Login({ navigate }) {
                   </div>
                 </div>
 
-                {error && (
-                  <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 text-red-300 text-sm">
-                    {error}
+                {resetError && (
+                  <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 text-red-300 text-sm flex items-start gap-2">
+                    <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                    <span>{resetError}</span>
                   </div>
                 )}
 
@@ -223,7 +261,8 @@ export default function Login({ navigate }) {
                   onClick={() => {
                     setIsResetPassword(false);
                     setResetEmail('');
-                    setError('');
+                    setResetError('');
+                    setResetSuccess(false);
                   }}
                   className="w-full text-gray-500 hover:text-gray-400 text-sm flex items-center justify-center gap-1"
                 >
@@ -285,16 +324,6 @@ export default function Login({ navigate }) {
               </div>
             </div>
 
-            <div className="text-center mt-4">
-              <button
-                type="button"
-                onClick={() => navigate('landing')}
-                className="text-gray-500 hover:text-gray-400 text-xs transition-colors"
-              >
-                ← Back to Home
-              </button>
-            </div>
-
             {/* Forgot Password Link */}
             {isLogin && (
               <div className="text-right">
@@ -309,8 +338,9 @@ export default function Login({ navigate }) {
             )}
 
             {error && (
-              <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 text-red-300 text-sm">
-                {error}
+              <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 text-red-300 text-sm flex items-start gap-2">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 

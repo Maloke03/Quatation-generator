@@ -25,6 +25,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import Subscribe from './pages/Subscribe';
 import Login from './pages/Login';
 import Landing from './pages/Landing';
+import Help from './pages/Help';
+import ResetPassword from './pages/ResetPassword';
 
 const MAIN_TABS = ['dashboard', 'clients', 'quotes', 'invoices', 'projects', 'materials', 'inventory', 'workers', 'attendance', 'settings'];
 
@@ -58,6 +60,10 @@ export default function App() {
         setRoute({ page: 'login', params: {} });
       } else if (cleanPath === '/landing' || cleanPath === '') {
         setRoute({ page: 'landing', params: {} });
+      } else if (cleanPath === '/help') {
+        setRoute({ page: 'help', params: {} });
+      } else if (cleanPath === '/reset-password') {
+        setRoute({ page: 'reset-password', params: {} });
       }
     } else {
       // Root path - show landing page
@@ -82,6 +88,7 @@ export default function App() {
     switch (page) {
       case 'landing':      return <Landing navigate={navigate} />;
       case 'login':        return <Login navigate={navigate} />;
+      case 'reset-password': return <ResetPassword navigate={navigate} />;
       case 'dashboard':    return <Dashboard navigate={navigate} />;
       case 'clients':      return <Clients navigate={navigate} />;
       case 'quotes':       return <Quotes navigate={navigate} />;
@@ -103,6 +110,7 @@ export default function App() {
       case 'admin':        return <AdminDashboard navigate={navigate} />;
       case 'subscribe':    return <Subscribe navigate={navigate} />;
       case 'settings':     return <Settings navigate={navigate} />;
+      case 'help':         return <Help navigate={navigate} />;
       default:             return <Landing navigate={navigate} />;
     }
   }
