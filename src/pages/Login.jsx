@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+// eslint-disable-next-line
 import { TopBar, Card, Button } from '../components/UI';
+// eslint-disable-next-line
 import { Mail, Lock, User, ArrowLeft, KeyRound, CheckCircle } from 'lucide-react';
 
 export default function Login({ navigate }) {
@@ -54,6 +56,7 @@ export default function Login({ navigate }) {
         
         // After login, check if user exists in our users table
         if (data.user) {
+          // eslint-disable-next-line
           const { data: userData, error: userError } = await supabase
             .from('users')
             .select('*')

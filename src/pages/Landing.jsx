@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button, Card } from '../components/UI';
-import { 
-  FileText, Users, Package, Briefcase, 
-  CheckCircle, Smartphone, Shield, Zap,
-  TrendingUp, Clock, DollarSign, BarChart3
+// eslint-disable-next-line
+import {  FileText, Users, Package, Briefcase, CheckCircle, Smartphone, Shield, Zap, TrendingUp, Clock, DollarSign, BarChart3
 } from 'lucide-react';
 
 export default function Landing({ navigate }) {

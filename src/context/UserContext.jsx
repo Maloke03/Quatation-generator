@@ -1,6 +1,6 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { getOrCreateUser, checkUserAccess } from '../db';
+import { checkUserAccess } from '../db';
 
 const UserContext = createContext();
 
@@ -10,46 +10,7 @@ export function UserProvider({ children, navigate }) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
 
-  useEffect(() => {
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) {
-        loadUser(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
-
-  // In UserContext.jsx, update the auth listener
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-    console.log('Auth event:', event);
-    setSession(session);
-    
-    if (session) {
-      loadUser(session.user.id);
-    } else {
-      setUser(null);
-      setAccess({ allowed: false, status: 'logged_out' });
-      setLoading(false);
-      
-      // Only redirect if not on a public page
-      const currentPath = window.location.pathname;
-      const isPublicPage = currentPath === '/' || 
-                          currentPath.includes('/landing') || 
-                          currentPath.includes('/login') || 
-                          currentPath.includes('/subscribe');
-      
-      if (!isPublicPage) {
-        window.location.replace('/');
-      }
-    }
-  });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const loadUser = async (userId) => {
+  const loadUser = useCallback(async (userId) => {
     try {
       // Get user from our users table
       const { data, error } = await supabase
@@ -94,7 +55,46 @@ export function UserProvider({ children, navigate }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session?.user?.email]);
+
+  useEffect(() => {
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        loadUser(session.user.id);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // In UserContext.jsx, update the auth listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth event:', event);
+      setSession(session);
+      
+      if (session) {
+        loadUser(session.user.id);
+      } else {
+        setUser(null);
+        setAccess({ allowed: false, status: 'logged_out' });
+        setLoading(false);
+        
+        // Only redirect if not on a public page
+        const currentPath = window.location.pathname;
+        const isPublicPage = currentPath === '/' || 
+                            currentPath.includes('/landing') || 
+                            currentPath.includes('/login') || 
+                            currentPath.includes('/subscribe');
+        
+        if (!isPublicPage) {
+          window.location.replace('/');
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [loadUser]);
 
   const refreshAccess = async () => {
     if (!user) return;
