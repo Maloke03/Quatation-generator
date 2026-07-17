@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { LangProvider } from './i18n/LangContext';
 import { UserProvider } from './context/UserContext';
 import SubscriptionGuard from './components/SubscriptionGuard';
@@ -144,6 +145,7 @@ export default function App() {
             </div>
           </div>
         )}
+        <Analytics />
       </UserProvider>
     </LangProvider>
   );
