@@ -153,7 +153,7 @@ const handleResetPassword = async (e) => {
   
   try {
     // Get the app URL - use Vercel URL if available
-    const appUrl = process.env.REACT_APP_APP_URL || 'https://quatation-generator.vercel.app';
+    const appUrl = process.env.REACT_APP_APP_URL || 'https://quatation-generator-eight.vercel.app/?';
     
     console.log('Sending reset email with redirect to:', `${appUrl}/reset-password`);
     
